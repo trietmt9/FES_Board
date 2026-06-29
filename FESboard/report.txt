@@ -1,0 +1,167 @@
+Info: Processing symbol 'R8:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C40:Capacitor_SMD:C_0201_0603Metric'.
+Info: Processing symbol 'C39:Capacitor_SMD:C_0201_0603Metric'.
+Info: Processing symbol 'R5:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C38:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'C37:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'R6:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C36:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'C35:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'R7:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C34:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'C33:'.
+Info: Processing symbol 'R4:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C32:'.
+Info: Processing symbol 'C31:'.
+Info: Processing symbol 'R9:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C30:'.
+Info: Processing symbol 'C29:'.
+Info: Processing symbol 'R10:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C27:'.
+Info: Processing symbol 'R11:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C26:'.
+Info: Processing symbol 'C25:'.
+Info: Processing symbol 'R12:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'D2:Package_TO_SOT_SMD:SOT-23'.
+Info: Processing symbol 'J1:Connector:Tag-Connect_TC2030-IDC-NL_2x03_P1.27mm_Vertical'.
+Info: Processing symbol 'J2:Connector_Audio:Jack_3.5mm_PJ320D_Horizontal'.
+Info: Processing symbol 'D8:Package_TO_SOT_SMD:SOT-23'.
+Info: Processing symbol 'D7:Package_TO_SOT_SMD:SOT-23'.
+Info: Processing symbol 'J3:Connector_Audio:Jack_3.5mm_PJ320D_Horizontal'.
+Info: Processing symbol 'D6:Package_TO_SOT_SMD:SOT-23'.
+Info: Processing symbol 'D5:Package_TO_SOT_SMD:SOT-23'.
+Info: Processing symbol 'J4:Connector_Audio:Jack_3.5mm_PJ320D_Horizontal'.
+Info: Processing symbol 'D4:Package_TO_SOT_SMD:SOT-23'.
+Info: Processing symbol 'D3:Package_TO_SOT_SMD:SOT-23'.
+Info: Processing symbol 'J5:Connector_Audio:Jack_3.5mm_PJ320D_Horizontal'.
+Info: Processing symbol 'C28:'.
+Info: Processing symbol 'D1:Package_TO_SOT_SMD:SOT-23'.
+Info: Processing symbol 'R1:Resistor_SMD:R_0402_1005Metric'.
+Info: Processing symbol 'C46:'.
+Info: Processing symbol 'C45:'.
+Info: Processing symbol 'R2:Resistor_SMD:R_0402_1005Metric'.
+Info: Processing symbol 'C44:Capacitor_SMD:C_0201_0603Metric'.
+Info: Processing symbol 'C43:Capacitor_SMD:C_0201_0603Metric'.
+Info: Processing symbol 'R3:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C42:Capacitor_SMD:C_0201_0603Metric'.
+Info: Processing symbol 'C41:Capacitor_SMD:C_0201_0603Metric'.
+Info: Processing symbol 'C8:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'C15:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'R17:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C14:Capacitor_SMD:C_0402_1005Metric'.
+Info: Processing symbol 'C24:'.
+Info: Processing symbol 'R18:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C12:Capacitor_SMD:C_0402_1005Metric'.
+Info: Processing symbol 'C11:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'R19:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C10:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'C9:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'R20:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C13:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'C7:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'U1:Package_QFP:LQFP-144_20x20mm_P0.5mm'.
+Info: Processing symbol 'C6:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'C5:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'U2:Package_QFP:TQFP-64_10x10mm_P0.5mm'.
+Info: Processing symbol 'C4:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'C3:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'U3:Package_DFN_QFN:VQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm_ThermalVias'.
+Info: Processing symbol 'C2:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'C1:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'C21:'.
+Info: Processing symbol 'C23:'.
+Info: Processing symbol 'R16:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C17:Capacitor_SMD:C_01005_0402Metric'.
+Info: Processing symbol 'R14:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'R13:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C20:Capacitor_SMD:C_0402_1005Metric'.
+Info: Processing symbol 'C22:Capacitor_SMD:C_0402_1005Metric'.
+Info: Processing symbol 'C18:Capacitor_SMD:C_0402_1005Metric'.
+Info: Processing symbol 'C16:Capacitor_SMD:C_0402_1005Metric'.
+Info: Processing symbol 'R15:Resistor_SMD:R_01005_0402Metric'.
+Info: Processing symbol 'C19:Capacitor_SMD:C_01005_0402Metric'.
+Add R10 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R9 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R13 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add J4 (footprint 'Connector_Audio:Jack_3.5mm_PJ320D_Horizontal').
+Add U1 (footprint 'Package_QFP:LQFP-144_20x20mm_P0.5mm').
+Add U3 (footprint 'Package_DFN_QFN:VQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm_ThermalVias').
+Add R1 (footprint 'Resistor_SMD:R_0402_1005Metric').
+Add J3 (footprint 'Connector_Audio:Jack_3.5mm_PJ320D_Horizontal').
+Add U2 (footprint 'Package_QFP:TQFP-64_10x10mm_P0.5mm').
+Add J2 (footprint 'Connector_Audio:Jack_3.5mm_PJ320D_Horizontal').
+Add R11 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R12 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add J5 (footprint 'Connector_Audio:Jack_3.5mm_PJ320D_Horizontal').
+Add R20 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R14 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R19 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R8 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R2 (footprint 'Resistor_SMD:R_0402_1005Metric').
+Add R18 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R3 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R7 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R15 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R4 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R17 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R5 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R6 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add R16 (footprint 'Resistor_SMD:R_01005_0402Metric').
+Add C11 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C22 (footprint 'Capacitor_SMD:C_0402_1005Metric').
+Add C20 (footprint 'Capacitor_SMD:C_0402_1005Metric').
+Add C19 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C18 (footprint 'Capacitor_SMD:C_0402_1005Metric').
+Add C17 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C16 (footprint 'Capacitor_SMD:C_0402_1005Metric').
+Add C15 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C14 (footprint 'Capacitor_SMD:C_0402_1005Metric').
+Add C13 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C12 (footprint 'Capacitor_SMD:C_0402_1005Metric').
+Add D8 (footprint 'Package_TO_SOT_SMD:SOT-23').
+Add C10 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C9 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C8 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C7 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C6 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C5 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C4 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C3 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C2 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C1 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C38 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add J1 (footprint 'Connector:Tag-Connect_TC2030-IDC-NL_2x03_P1.27mm_Vertical').
+Add D7 (footprint 'Package_TO_SOT_SMD:SOT-23').
+Add D6 (footprint 'Package_TO_SOT_SMD:SOT-23').
+Add D5 (footprint 'Package_TO_SOT_SMD:SOT-23').
+Add D4 (footprint 'Package_TO_SOT_SMD:SOT-23').
+Add D3 (footprint 'Package_TO_SOT_SMD:SOT-23').
+Add D2 (footprint 'Package_TO_SOT_SMD:SOT-23').
+Add D1 (footprint 'Package_TO_SOT_SMD:SOT-23').
+Add C44 (footprint 'Capacitor_SMD:C_0201_0603Metric').
+Add C43 (footprint 'Capacitor_SMD:C_0201_0603Metric').
+Add C42 (footprint 'Capacitor_SMD:C_0201_0603Metric').
+Add C41 (footprint 'Capacitor_SMD:C_0201_0603Metric').
+Add C40 (footprint 'Capacitor_SMD:C_0201_0603Metric').
+Add C39 (footprint 'Capacitor_SMD:C_0201_0603Metric').
+Add C36 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C35 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C34 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Add C37 (footprint 'Capacitor_SMD:C_01005_0402Metric').
+Error: Cannot add C46 (no footprint assigned).
+Error: Cannot add C32 (no footprint assigned).
+Error: Cannot add C31 (no footprint assigned).
+Error: Cannot add C30 (no footprint assigned).
+Error: Cannot add C29 (no footprint assigned).
+Error: Cannot add C28 (no footprint assigned).
+Error: Cannot add C27 (no footprint assigned).
+Error: Cannot add C26 (no footprint assigned).
+Error: Cannot add C25 (no footprint assigned).
+Error: Cannot add C45 (no footprint assigned).
+Error: Cannot add C24 (no footprint assigned).
+Error: Cannot add C23 (no footprint assigned).
+Error: Cannot add C21 (no footprint assigned).
+Error: Cannot add C33 (no footprint assigned).
+
+
+Info: Total warnings: 0, errors: 14.
