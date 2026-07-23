@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "Fanstel_WT")(type "KiCad")(uri "/home/stephen/Documents/KiCad library/Fanstel_WT.pretty")(options "")(descr "Fanstel WT02C40C nRF5340 + nRF7002 module footprint"))
+)

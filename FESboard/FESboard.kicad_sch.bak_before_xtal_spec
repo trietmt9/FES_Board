@@ -38345,7 +38345,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://abracon.com/Resonators/abm8.pdf"
+		(property "Datasheet" ""
 			(at 685.8 203.2 0)
 			(hide yes)
 			(show_name no)
@@ -38356,7 +38356,7 @@
 				)
 			)
 		)
-		(property "Description" "8MHz xtal, ABM8 3.2x2.5mm 4-pad, CL=8pF, ESR<=400R, C0<=3pF"
+		(property "Description" "Four pin crystal, GND on pins 2 and 4"
 			(at 685.8 203.2 0)
 			(hide yes)
 			(show_name no)
@@ -38444,7 +38444,7 @@
 				)
 			)
 		)
-		(property "Description" "Xtal load cap: C=2*(CL-Cs), CL=8pF Cs=4pF"
+		(property "Description" "Unpolarized capacitor"
 			(at 674.37 210.82 0)
 			(hide yes)
 			(show_name no)
@@ -38526,7 +38526,7 @@
 				)
 			)
 		)
-		(property "Description" "Xtal load cap: C=2*(CL-Cs), CL=8pF Cs=4pF"
+		(property "Description" "Unpolarized capacitor"
 			(at 697.23 210.82 0)
 			(hide yes)
 			(show_name no)
