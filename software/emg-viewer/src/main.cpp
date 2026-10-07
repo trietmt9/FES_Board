@@ -92,6 +92,7 @@ int main(int argc, char *argv[])
     const auto replaySpeedOpt = opt("replay-speed", "Replay pacing, 1 = recorded speed.", "x", "1");
     const auto portOpt = opt("p,port", "Serial port to connect to, e.g. ttyACM0.", "port");
     const auto baudOpt = opt("b,baud", "Baud rate.", "rate", "921600");
+    const auto wifiOpt = opt("wifi", "Connect to a board over Wi-Fi at host[:port] (port defaults to 5000).", "host[:port]");
 
     // ---- view (the spec names these settings but gives no control for them) --
     const auto signalOpt = opt("signal", "Signal type: ecg, eeg or emg.", "type");
@@ -122,7 +123,7 @@ int main(int argc, char *argv[])
     const auto grabOpt = opt("grab", "Save a screenshot after --grab-delay and exit.", "file");
     const auto grabDelayOpt = opt("grab-delay", "Milliseconds before --grab.", "ms", "3000");
 
-    for (const auto &o : {replayOpt, replaySpeedOpt, portOpt, baudOpt, signalOpt, domainOpt,
+    for (const auto &o : {replayOpt, replaySpeedOpt, portOpt, baudOpt, wifiOpt, signalOpt, domainOpt,
                           windowOpt, gainOpt, avgOpt, modeOpt, noGlowOpt, barsOpt, mainsOpt,
                           patientOpt, sessionOpt, openDevicesOpt, previewOpt, previewWifiOpt, diagOpt,
                           freezeOpt, markerOpt, sizeOpt, grabOpt, grabDelayOpt}) {
@@ -217,6 +218,13 @@ int main(int argc, char *argv[])
         if (parser.isSet(replayOpt)) {
             devices.openReplayFile(parser.value(replayOpt));
             acquisition.setReplaySpeed(parser.value(replaySpeedOpt).toDouble());
+        } else if (parser.isSet(wifiOpt)) {
+            // The dialog's own path again: set the address, then press Connect.
+            const QString v = parser.value(wifiOpt);
+            const int colon = v.lastIndexOf(QLatin1Char(':'));
+            devices.setWifiHost(colon > 0 ? v.left(colon) : v);
+            devices.setWifiPort(colon > 0 ? v.mid(colon + 1).toInt() : wifiaddress::kDefaultPort);
+            devices.connectWifi();
         } else if (parser.isSet(portOpt)) {
             // Reuse the dialog's own path so there is exactly one way to connect.
             devices.scan();

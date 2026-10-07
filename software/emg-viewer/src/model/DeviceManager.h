@@ -107,9 +107,8 @@ class DeviceManager : public QObject {
     Q_PROPERTY(bool canDisconnect READ canDisconnect NOTIFY stateChanged)
 
     // ---- Wi-Fi tab (WIFI_DESIGN.md section 4) --------------------------------------------
-    // The UI exists before the link does. What is real today: the address the user
-    // typed is validated and remembered. What is not: connecting. connectWifi() says so
-    // rather than pretending.
+    // The address is validated and remembered; Connect opens a TCP connection to it.
+    // Discovery (mDNS) is not built, so the user types the address.
 
     /// 0 = USB / serial list, 1 = Wi-Fi. Remembered between runs.
     Q_PROPERTY(int transport READ transport WRITE setTransport NOTIFY transportChanged)
@@ -118,8 +117,9 @@ class DeviceManager : public QObject {
     /// Empty when the address is fine or not yet typed; otherwise what is wrong with it.
     Q_PROPERTY(QString wifiProblem READ wifiProblem NOTIFY wifiChanged)
     Q_PROPERTY(bool canConnectWifi READ canConnectWifi NOTIFY wifiChanged)
-    /// manual | searching | connecting | connected | nodata | error. "manual" is the
-    /// only value a real run produces today; the rest are for --preview-wifi.
+    /// manual | searching | connecting | connected | nodata | error. A real run
+    /// produces manual, connecting, connected, nodata and error; "searching" is only
+    /// for --preview-wifi.
     Q_PROPERTY(QString wifiPhase READ wifiPhase NOTIFY wifiChanged)
     /// The Wi-Fi card on the Wi-Fi tab: name, "address . port", status text. Empty when
     /// no Wi-Fi device is connected or connecting.
@@ -196,8 +196,7 @@ public:
 public slots:
     void scan();
     Q_INVOKABLE void connectSelected();
-    /// Connect to wifiHost:wifiPort. Validates and remembers the address; the link
-    /// itself is not built yet, and this says so.
+    /// Connect to wifiHost:wifiPort over TCP (the board's nRF7002 is the server).
     Q_INVOKABLE void connectWifi();
     Q_INVOKABLE void disconnectDevice();
 
@@ -218,6 +217,8 @@ private:
     void enumerate();
     void setState(State s);
     void setError(const QString &msg);
+    /// manual | connecting | connected | nodata, or the --preview-wifi phase.
+    QString effectivePhase() const;
     void reselect(const QString &preferName);
 
     Acquisition *m_acq;
@@ -235,6 +236,7 @@ private:
     int m_wifiPort = wifiaddress::kDefaultPort;
     QString m_previewWifi;        // "" = real; else the --preview-wifi phase
     bool m_noData = false;
+    bool m_viaWifi = false;       // the current/pending link is the Wi-Fi tab's
 
     bool m_scanning = false;
     bool m_watching = false;

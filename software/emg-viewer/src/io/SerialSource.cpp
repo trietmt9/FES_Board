@@ -42,6 +42,13 @@ void SerialSource::start()
     connect(m_port, &QSerialPort::readyRead, this, &SerialSource::onReadyRead);
     connect(m_port, &QSerialPort::errorOccurred, this, &SerialSource::onErrorOccurred);
 
+    beginStream();
+
+    emit started();
+}
+
+void SerialSource::beginStream()
+{
     m_parser.reset();
     m_haveInfo = false;
     m_overflows = 0;
@@ -62,8 +69,6 @@ void SerialSource::start()
         connect(m_statsTimer, &QTimer::timeout, this, &SerialSource::publishStats);
     }
     m_statsTimer->start();
-
-    emit started();
 }
 
 void SerialSource::stop()

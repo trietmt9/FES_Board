@@ -3,6 +3,7 @@
 #include "io/Recorder.h"
 #include "io/ReplaySource.h"
 #include "io/SerialSource.h"
+#include "io/TcpClientSource.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -288,30 +289,47 @@ void Acquisition::connectSerial(const QString &portName, int baud)
     if (m_running) {
         return;
     }
-    setPaused(false);
     if (portName.isEmpty()) {
         emit sourceError(tr("No serial port selected."));
         return;
     }
+    auto *src = new SerialSource;
+    src->setPortName(portName);
+    src->setBaudRate(baud);
+    goLive(src, tr("Streaming from %1 at %2 baud").arg(portName).arg(baud));
+}
 
+void Acquisition::connectTcp(const QString &host, int port)
+{
+    if (m_running) {
+        return;
+    }
+    auto *src = new TcpClientSource;
+    src->setTarget(host, quint16(port));
+    goLive(src, tr("Streaming from %1:%2").arg(host).arg(port));
+}
+
+/// What both live transports share. @p src is a not-yet-started source; its
+/// started() signal is what flips the app to Live.
+void Acquisition::goLive(SerialSource *src, const QString &streamingText)
+{
+    setPaused(false);
     teardownSource();
     m_stats = LinkStats{};
     m_lastParser = emg::ParserStats{};
     m_lastStatsMs = 0;
     reconfigureRing();
 
-    m_serial = new SerialSource;
-    m_serial->setPortName(portName);
-    m_serial->setBaudRate(baud);
+    m_serial = src;
     m_serial->setForwardRaw(m_recording);
     attachSource(m_serial);
 
-    connect(m_serial, &ISampleSource::started, this, [this, portName, baud] {
+    connect(m_serial, &ISampleSource::started, this, [this, streamingText] {
         m_startedMs = QDateTime::currentMSecsSinceEpoch();
         setDataFlowing(true);   // grace: opening the port can reset the board
         setRunning(true);
         setMode(Mode::Live);
-        setStatus(tr("Streaming from %1 at %2 baud").arg(portName).arg(baud));
+        setStatus(streamingText);
     });
     connect(m_serial, &ISampleSource::rawBytes, m_recorder, &Recorder::write);
 

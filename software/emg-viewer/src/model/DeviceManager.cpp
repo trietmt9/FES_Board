@@ -150,6 +150,16 @@ DeviceManager::DeviceManager(Acquisition *acq, QObject *parent) : QObject(parent
         m_transport = s.value(QStringLiteral("device/transport"), 0).toInt() == 1 ? 1 : 0;
     }
 
+    // Connected over Wi-Fi but no DATA frames arriving: say so (WIFI_DESIGN.md section 5).
+    connect(m_acq, &Acquisition::dataFlowingChanged, this, [this] {
+        const bool silent = m_viaWifi && m_state == Connected && !m_acq->dataFlowing();
+        if (silent != m_noData && m_previewWifi.isEmpty()) {
+            m_noData = silent;
+            emit stateChanged();
+            emit wifiChanged();
+        }
+    });
+
     m_rescanTimer.setInterval(3000);
     connect(&m_rescanTimer, &QTimer::timeout, this, &DeviceManager::enumerate);
 
@@ -190,7 +200,7 @@ QString DeviceManager::iconName() const
 {
     switch (m_state) {
     case Connected: {
-        if (!m_previewWifi.isEmpty()) {
+        if (!m_previewWifi.isEmpty() || m_viaWifi) {
             return m_noData ? QStringLiteral("wifi-medium") : QStringLiteral("wifi-high");
         }
         const auto *e = m_model.at(m_model.indexOfName(m_connectedName));
@@ -355,14 +365,29 @@ bool DeviceManager::canConnectWifi() const
     return m_state != Connecting && m_previewWifi.isEmpty() && wifiaddress::usable(m_wifiHost, m_wifiPort);
 }
 
+QString DeviceManager::effectivePhase() const
+{
+    if (!m_previewWifi.isEmpty()) {
+        return m_previewWifi;
+    }
+    if (m_viaWifi && m_state == Connecting) {
+        return QStringLiteral("connecting");
+    }
+    if (m_viaWifi && m_state == Connected) {
+        return m_noData ? QStringLiteral("nodata") : QStringLiteral("connected");
+    }
+    return QStringLiteral("manual");
+}
+
 QString DeviceManager::wifiPhase() const
 {
-    return m_previewWifi.isEmpty() ? QStringLiteral("manual") : m_previewWifi;
+    const QString p = effectivePhase();
+    return (p == QLatin1String("manual") && !m_error.isEmpty()) ? QStringLiteral("error") : p;
 }
 
 QString DeviceManager::wifiDeviceName() const
 {
-    const QString p = m_previewWifi;
+    const QString p = effectivePhase();
     return (p == QLatin1String("connecting") || p == QLatin1String("connected") || p == QLatin1String("nodata"))
                ? m_pendingName : QString();
 }
@@ -375,7 +400,7 @@ QString DeviceManager::wifiDeviceMeta() const
 
 QString DeviceManager::wifiDeviceStatus() const
 {
-    const QString p = m_previewWifi;
+    const QString p = effectivePhase();
     if (p == QLatin1String("connecting")) {
         return QStringLiteral("Connecting…");
     }
@@ -390,7 +415,7 @@ QString DeviceManager::wifiDeviceStatus() const
 
 QString DeviceManager::wifiStatusLine() const
 {
-    const QString p = m_previewWifi;
+    const QString p = effectivePhase();
     if (p == QLatin1String("searching")) {
         return QStringLiteral("Searching for devices…");
     }
@@ -406,7 +431,7 @@ QString DeviceManager::wifiStatusLine() const
     if (!m_error.isEmpty()) {
         return m_error;
     }
-    // The honest default. There is no discovery yet, so the user supplies the address.
+    // The default. There is no discovery yet, so the user supplies the address.
     return QStringLiteral("Enter the amplifier's address. This PC must be on the same network.");
 }
 
@@ -420,9 +445,14 @@ void DeviceManager::connectWifi()
         setError(why.isEmpty() ? tr("Enter the amplifier's address.") : why);
         return;
     }
-    // The address is real and is remembered (setWifiHost); the link is not built yet.
-    // Say so, instead of showing "Connecting..." for something that cannot happen.
-    setError(tr("The Wi-Fi link is not built yet - connect over USB for now."));
+    setError(QString());
+    m_viaWifi = true;
+    m_noData = false;
+    m_pendingName = m_wifiHost.trimmed();
+    setState(Connecting);
+    m_connectTimeout.start();
+    emit wifiChanged();
+    m_acq->connectTcp(m_pendingName, m_wifiPort);
 }
 
 bool DeviceManager::setPreviewWifi(const QString &phase)
@@ -565,15 +595,20 @@ void DeviceManager::setState(State s)
         return;
     }
     m_state = s;
+    if (s == Off && m_previewWifi.isEmpty()) {
+        m_noData = false;
+    }
     emit stateChanged();
     emit selectionChanged();
     emit statusLineChanged();
+    emit wifiChanged();     // phase, status line and Connect enablement follow the state
 }
 
 void DeviceManager::setError(const QString &msg)
 {
     m_error = msg;
     emit statusLineChanged();
+    emit wifiChanged();
 }
 
 void DeviceManager::connectSelected()
@@ -599,6 +634,7 @@ void DeviceManager::connectSelected()
     }
 
     setError(QString());
+    m_viaWifi = false;
     const QString name = e->name;
     const QString port = e->port;
 
@@ -641,6 +677,7 @@ void DeviceManager::disconnectDevice()
 void DeviceManager::openReplayFile(const QString &path)
 {
     m_pendingName = QFileInfo(path).fileName();
+    m_viaWifi = false;
     m_isReplay = true;
     m_acq->openReplay(QUrl::fromLocalFile(path));
 }

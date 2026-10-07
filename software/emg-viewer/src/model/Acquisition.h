@@ -132,6 +132,8 @@ public:
 public slots:
     /// Open @p portName at @p baud and start streaming.
     void connectSerial(const QString &portName, int baud);
+    /// Connect to a board listening on host:port and start streaming.
+    void connectTcp(const QString &host, int port);
     void openReplay(const QUrl &fileUrl);
     void disconnectSource();
 
@@ -170,6 +172,7 @@ private slots:
 
 private:
     void teardownSource();
+    void goLive(SerialSource *src, const QString &streamingText);
     void attachSource(ISampleSource *src);
     void setStatus(const QString &text);
     void setMode(Mode m);

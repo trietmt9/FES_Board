@@ -36,16 +36,16 @@ public slots:
     void start() override;
     void stop() override;
 
-private slots:
-    void onReadyRead();
-    void onErrorOccurred();
+protected slots:
     void publishStats();
 
-private:
+protected:
+    /// Reset the parser, loss tracker and rings and start the 1 s stats timer.
+    /// Shared with TcpClientSource, which only swaps the transport.
+    void beginStream();
     void handleData(const emg::DataFrame &frame);
     void handleInfo(const emg::InfoFrame &info);
 
-    QSerialPort *m_port = nullptr;
     QTimer *m_statsTimer = nullptr;
     QElapsedTimer m_uptime;
 
@@ -58,11 +58,17 @@ private:
     // ARCHITECTURE.md 2.4 explains why we prefer the wire value.
     double m_uvPerCode = 2400000.0 / 6.0 / 8388608.0;
 
-    QString m_portName;
-    int m_baudRate = 921600;
     QAtomicInt m_forwardRaw{0};
-
     quint64 m_overflows = 0;
     std::vector<float> m_scratch;   // raw microvolts
     std::vector<float> m_filtered;  // band-passed microvolts
+
+private slots:
+    void onReadyRead();
+    void onErrorOccurred();
+
+private:
+    QSerialPort *m_port = nullptr;
+    QString m_portName;
+    int m_baudRate = 921600;
 };
