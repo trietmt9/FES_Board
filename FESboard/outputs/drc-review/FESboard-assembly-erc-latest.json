@@ -1,0 +1,271 @@
+{
+    "$schema": "https://schemas.kicad.org/erc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-09-21T16:19:52",
+    "ignored_checks": [
+        {
+            "description": "Global label only appears once in the schematic",
+            "key": "single_global_label"
+        },
+        {
+            "description": "Four connection points are joined together",
+            "key": "four_way_junction"
+        },
+        {
+            "description": "SPICE model issue",
+            "key": "simulation_model_issue"
+        },
+        {
+            "description": "Assigned footprint doesn't match footprint filters",
+            "key": "footprint_filter"
+        }
+    ],
+    "included_severities": [
+        "error",
+        "warning",
+        "exclusion"
+    ],
+    "kicad_version": "10.0.6",
+    "sheets": [
+        {
+            "path": "/",
+            "uuid_path": "/bc6baefb-a034-4913-a751-2c83a57572e0",
+            "violations": [
+                {
+                    "description": "Input Power pin not driven by any Output Power pins",
+                    "items": [
+                        {
+                            "description": "Symbol #PWR01 Pin 1 [Power input, Line]",
+                            "pos": {
+                                "x": 1.0795,
+                                "y": 6.7437
+                            },
+                            "uuid": "1d41966a-84da-4f7c-8b4d-c7e9911018c6"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "power_pin_not_driven"
+                },
+                {
+                    "description": "Input Power pin not driven by any Output Power pins",
+                    "items": [
+                        {
+                            "description": "Symbol #PWR017 Pin 1 [Power input, Line]",
+                            "pos": {
+                                "x": 1.5621,
+                                "y": 6.8961
+                            },
+                            "uuid": "d6ec8118-48ac-49df-af7a-a2c4c521140e"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "power_pin_not_driven"
+                },
+                {
+                    "description": "Input pin not driven by any Output pins",
+                    "items": [
+                        {
+                            "description": "Symbol U2 Pin 12 [IN3P, Input, Line]",
+                            "pos": {
+                                "x": 3.7465,
+                                "y": 2.2606
+                            },
+                            "uuid": "344dd045-ac51-444f-b964-d4e53b5e063a"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "pin_not_driven"
+                },
+                {
+                    "description": "Input pin not driven by any Output pins",
+                    "items": [
+                        {
+                            "description": "Symbol U2 Pin 11 [IN3N, Input, Line]",
+                            "pos": {
+                                "x": 3.7465,
+                                "y": 2.286
+                            },
+                            "uuid": "a0a4a117-e39b-41d7-8f3a-a4ef39aba545"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "pin_not_driven"
+                },
+                {
+                    "description": "Input pin not driven by any Output pins",
+                    "items": [
+                        {
+                            "description": "Symbol U2 Pin 10 [IN4P, Input, Line]",
+                            "pos": {
+                                "x": 3.7465,
+                                "y": 2.3368
+                            },
+                            "uuid": "ad707aff-df11-446c-b5b6-8e43149ef847"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "pin_not_driven"
+                },
+                {
+                    "description": "Input pin not driven by any Output pins",
+                    "items": [
+                        {
+                            "description": "Symbol U2 Pin 9 [IN4N, Input, Line]",
+                            "pos": {
+                                "x": 3.7465,
+                                "y": 2.3622
+                            },
+                            "uuid": "517977f6-a916-4a0d-99be-34cf5841a7ad"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "pin_not_driven"
+                },
+                {
+                    "description": "Input Power pin not driven by any Output Power pins",
+                    "items": [
+                        {
+                            "description": "Symbol #PWR052 Pin 1 [Power input, Line]",
+                            "pos": {
+                                "x": 3.9751,
+                                "y": 1.778
+                            },
+                            "uuid": "0982752b-4d4a-462d-9e1a-7d754fb7f4e5"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "power_pin_not_driven"
+                },
+                {
+                    "description": "Unconnected wire endpoint",
+                    "items": [
+                        {
+                            "description": "Horizontal Wire, length 0.0889 mm",
+                            "pos": {
+                                "x": 1.2192,
+                                "y": 1.9685
+                            },
+                            "uuid": "66fa5585-d9b8-4b4a-9406-c1a6b48927a2"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "unconnected_wire_endpoint"
+                },
+                {
+                    "description": "Unconnected wire endpoint",
+                    "items": [
+                        {
+                            "description": "Horizontal Wire, length 0.0889 mm",
+                            "pos": {
+                                "x": 1.2319,
+                                "y": 2.5527
+                            },
+                            "uuid": "57b6a5f3-6f6e-40f6-ad0a-975c90789906"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "unconnected_wire_endpoint"
+                },
+                {
+                    "description": "Both GND and GNDA are attached to the same items; GND will be used in the netlist",
+                    "items": [
+                        {
+                            "description": "Symbol #PWR086 Pin 1 [Power input, Line]",
+                            "pos": {
+                                "x": 8.0645,
+                                "y": 2.0193
+                            },
+                            "uuid": "d6671213-4b49-425c-8241-c50f75aff9ed"
+                        },
+                        {
+                            "description": "Symbol #PWR031 Pin 1 [Power input, Line]",
+                            "pos": {
+                                "x": 1.905,
+                                "y": 2.0066
+                            },
+                            "uuid": "636d1a3b-0c88-4d9f-9b62-c0005943c5ea"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "multiple_net_names"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'IN3P'",
+                            "pos": {
+                                "x": 3.6068,
+                                "y": 2.2606
+                            },
+                            "uuid": "8e278ed0-af59-44d9-a257-17146f7b8eef"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'IN3N'",
+                            "pos": {
+                                "x": 3.6068,
+                                "y": 2.286
+                            },
+                            "uuid": "419303e7-bd5e-44cd-81a7-c81cbd5ab0e8"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'IN4P'",
+                            "pos": {
+                                "x": 3.6068,
+                                "y": 2.3368
+                            },
+                            "uuid": "51898f01-6023-4ed9-856e-be01bb9b7e72"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'IN4N'",
+                            "pos": {
+                                "x": 3.6068,
+                                "y": 2.3622
+                            },
+                            "uuid": "690bfbae-c4fe-448e-8b30-5f46b5ed73ba"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Unconnected wire endpoint",
+                    "items": [
+                        {
+                            "description": "Horizontal Wire, length 0.1016 mm",
+                            "pos": {
+                                "x": 4.2926,
+                                "y": 2.1336
+                            },
+                            "uuid": "76dfaed7-1954-4bc4-b4d9-a9c0a3aaa02f"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "unconnected_wire_endpoint"
+                }
+            ]
+        }
+    ],
+    "source": "FESboard.kicad_sch"
+}

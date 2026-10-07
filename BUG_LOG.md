@@ -1,0 +1,1323 @@
+# BUG_LOG — FES_Board
+
+Running record of bugs found and fixed, newest first.
+
+**Every entry must say how it was verified**, and must distinguish *builds
+clean* from *proven on hardware*. A fix that has only been compiled is **not**
+verified — see `WORKFLOW.md` §7.
+
+Fields: **Found** / **Fixed** — dates · **Area** · **Severity** ·
+**Status**: `OPEN` · `FIXED-UNVERIFIED` (code changed, not yet run on hardware) ·
+`FIXED-VERIFIED` (confirmed on hardware).
+
+---
+
+## OPEN
+
+### B-034 · DRDY wire came loose — the physical cause behind B-020/B-022/B-033
+**Found** 2026-09-07 · hardware · **CRITICAL** · `OPEN` (wire to be reseated,
+then B-022 re-tested)
+
+**Found by inspection, not by code.** The DRDY jumper had come away from the
+board. Noticed while firmware was still being tuned to work around its
+symptoms.
+
+**Why this matters more than the entries it explains.** Every timing conclusion
+in this log rests on DRDY. A pin that never changes state cannot be told from a
+slow one by the acquisition loop, and each failure mode is silent:
+
+| DRDY state | What the loop does | Logged as |
+|---|---|---|
+| stuck ASSERTED | free-runs, re-reading one stale conversion | B-020, B-033 |
+| stuck IDLE | reads nothing | — |
+| INTERMITTENT | erratic drops, jitter, unstable rate | B-033 second round |
+
+**The observations fit a bad connection better than any firmware cause.**
+
+- 7337 reads/s from a part converting ~1000-1500/s — reads free-running, not
+  paced by conversions.
+- Longest identical run **135 samples** — re-reading a register nothing updated.
+- Read rate tracking whatever limit was imposed (7337 unthrottled, 1429 at a
+  700 us floor, 4000 at 250 us) rather than settling at a conversion rate. **A
+  read rate that follows the throttle instead of the hardware is the signature.**
+- The devicetree has `GPIO_ACTIVE_LOW | GPIO_PULL_UP`, so a cleanly open pin
+  reads NOT-asserted and the stream would stop dead. Data was still arriving, so
+  the fault is intermittent contact rather than a clean open.
+
+**B-022 is now in question and must be re-tested.** It concluded from *"edge
+detection takes exactly one sample and then stalls forever"* that this wiring
+does not produce clean edges, and prescribed level polling. **A pin stuck
+asserted produces precisely that symptom.** If edges are clean once the wire is
+sound, edge detection is the correct design and removes duplicate reads at the
+source - making `MIN_READ_INTERVAL_US` unnecessary rather than a constant to
+keep tuning. Do not treat "level, not edge" as settled until it is re-tested on
+a known-good connection.
+
+**Guard added so this cannot be silent again** — `firmware/src/main.c` STEP 3b,
+after `ads_emg_start_rdata()`. Counts DRDY transitions over a 50 ms window and
+classifies:
+
+```
+DRDY alive: 108 edges in 50 ms                                    (healthy)
+DRDY toggled 7 times in 50 ms, expected >= 50 - intermittent ...   (this fault)
+DRDY never changed state in 50 ms (stuck ASSERTED).                (open/short)
+  CHECK THE WIRE. Every sample time below is invalid.
+```
+
+**Lesson: check that the signal exists before modelling its behaviour.** Three
+firmware entries characterised this pin's "behaviour on this wiring" -
+level-vs-edge, re-read throttling, rate sanity bounds - and the pin was not
+reliably connected. A liveness check costs 50 ms at boot and would have
+short-circuited all of it. **When a signal behaves in a way the datasheet does
+not describe, confirm the wire before writing code to accommodate it.**
+
+
+### B-033 · Ring buffer reintroduced B-020 — 30 BPM read as 111 · my regression
+**Found** 2026-09-07 · **Fixed** 2026-09-07 · firmware · **CRITICAL** ·
+`FIXED-UNVERIFIED` (builds clean both boards; NOT yet reflashed or re-captured)
+
+**Symptom.** ECG simulator set to 30 BPM, app reports **111 BPM**. Same family
+as B-013 (90), B-020 (90/150/11) and B-029 (115), so it was triaged against
+those first rather than from scratch.
+
+**Measured, not theorised.** `Record/emg-20260907-185523.emgraw`, decoded with
+`software/emg-viewer/tools/decode_capture.py`:
+
+| | |
+|---|---|
+| INFO advertises | **7337 SPS** |
+| TRUE rate (MCU uptime clock) | **2000 SPS** |
+| ratio | **0.273x** — `TIMEBASE IS WRONG` |
+| BPM at the TRUE rate | **30.2** — correct |
+| BPM at the ADVERTISED rate | **110.9** — what the app showed |
+| interval spread | 3 % — a regular ECG, not noise |
+| repeat factor | 1.31x, longest identical run 135 |
+
+The detector, the electrodes and the signal were all fine. 30.2 x (7337/2000) =
+110.9. Only the advertised rate was wrong, and the host builds its entire
+timebase from it.
+
+**A hypothesis tested and discarded first.** The firmware band had been changed
+to 2-40 Hz, and a 2 Hz high-pass on an ECG is well outside IEC 60601-2-25. A
+30 BPM synthetic ECG was pushed through all three bands tried that day
+(0.5-40, 1.0-100, 2.0-40) cascaded with the host's 0.5-40 and a Pan-Tompkins
+detector matching `HeartRate.h`. All three read **~32 BPM**. The filter was not
+manufacturing beats, and the search moved on.
+
+**Root cause — two defects, both introduced hours earlier by the ring buffer.**
+
+*Fault 1: the removed guard was also a throttle.* `service_adc()` STEP 1 was
+
+```c
+if (gpio_pin_get_dt(&ads_rdy) != 1 || block_fill >= BLOCK_SAMPLES)   /* before */
+if (gpio_pin_get_dt(&ads_rdy) != 1)                                   /* after  */
+```
+
+`block_fill >= BLOCK_SAMPLES` read as "the buffer is full", and the ring made
+that condition meaningless — so it was deleted. It was *also* limiting how often
+the loop touched the chip. DRDY is polled by LEVEL because edge detection stalls
+on this wiring (B-022), and the pin stays asserted rather than pulsing, so with
+no throttle the loop re-read the same conversion repeatedly. **This is B-020
+verbatim**: the ADS converts at ~1130 SPS, the loop counted 7337.
+
+*Fault 2: `conversions++` counted reads, not deliveries.* Before the ring the two
+were the same thing — the old code only counted when it also stored. The ring
+separated them and the counter was left on the read side, so a sample dropped at
+the ring still inflated `advertised_rate`.
+
+**Fix — `firmware/src/main.c`:**
+
+| Line(s) | Change |
+|---|---|
+| 50 | New `MIN_READ_INTERVAL_US` = 70 % of the nominal sample period (700 us against a real ~885 us). Restores the throttle explicitly instead of as a side effect. |
+| 144-148 | STEP 1 now also requires `MIN_READ_INTERVAL_US` since the previous read. Level polling is kept; a re-read inside one conversion period cannot happen. |
+| 158 | Reuses `now_cyc` for the gap timing rather than taking a second `k_cycle_get_32()`. |
+| 192-196 | `conversions++` moved from immediately after the read to **after** the successful `ring_buf_put()`. It now counts samples delivered. |
+| 263-270 | Rate bound was `avg > 100 && avg < 40000`, which passed 7337 silently. Now bounded to 0.5x-2x of nominal — comfortably clear of the genuine ~13 % clock error (B-026) — and logs `measured NNNN SPS implausible for nominal NNNN` instead of rescaling every BPM in silence. |
+
+**Also added:** duplicate-run detection in `tools/decode_capture.py` (`repeat
+factor`, `longest identical run`). B-020's signature was invisible to CRC,
+sequence numbers and frame timing; it is only visible in the data. The tool that
+found B-020 could not report it, which is why this took a capture rather than a
+glance. Validated against a clean synthetic 30 BPM capture: `1.00x`, `30.0 bpm`.
+
+**First fix attempt was wrong in two ways — corrected same day.** Reflashed, the
+waveform came good but drops stayed high and the app stopped reporting BPM at
+all.
+
+*Error A: the throttle was sized from the NOMINAL rate.* `MIN_READ_INTERVAL_US`
+was 70 % of the nominal period = **700 us**, capping reads at 1429 SPS. The part
+converts at ~1527 SPS (2000 delivered / 1.31 repeat, from the capture above), so
+the floor was gating **real conversions, not just re-reads** - 6.4 % lost at
+1527 SPS, ~28 % if the true rate is nearer 2000. A floor only has to outlast a
+re-read (SPI read ~27 us, loop iteration tens of us), never a conversion. Now
+**250 us**, a 4000 SPS ceiling that no CONFIG1 data rate here can reach.
+
+*Error B: the sanity guard substituted nominal for a measured rate it disliked.*
+That is exactly backwards. Since `conversions++` now counts DELIVERED samples,
+`advertised_rate` equals the rate the host receives **by construction**, so a
+self-consistent rate times every beat correctly however odd it looks. Replacing
+it with nominal is what breaks BPM:
+
+| | advertised | delivered | 30 BPM reads |
+|---|---|---|---|
+| measured rate used as-is | 4000 | 4000 | **30.0** |
+| guard substitutes nominal | 1000 | 4000 | **7.5** |
+
+The guard now **warns and does not act** — `LOG_WRN` when the figure exceeds 1.5x
+nominal, flagging duplicate reads while leaving the timebase intact.
+
+**Second fix — `firmware/src/main.c`:**
+
+| Line(s) | Change |
+|---|---|
+| 61 | `MIN_READ_INTERVAL_US` 700 us -> **250 us**, sized against a re-read rather than a conversion period |
+| 276-283 | Rate bound back to `avg > 100 && avg < 40000`; implausible values now `LOG_WRN` only, never substituted |
+
+**Verification owed.** Reflash and re-record. Expect: drop rate down, BPM back,
+advertised ~= true, ratio `OK`, same BPM at both rates. **If `repeat factor`
+stays near 1.31 with runs of 135, that is a separate mechanism and this entry is
+not closed.**
+
+**Second lesson: a throttle must be sized against what it is suppressing, not
+against the nominal it happens to sit near** - and **a self-consistent wrong-
+looking number beats a plausible-looking substituted one.** Both errors came
+from treating the nominal rate as ground truth when the delivered rate is the
+only figure the host's timebase actually needs.
+
+**Lesson: deleting a guard deletes every job it was doing, not just the one it is
+named for.** The condition read as a buffer check and was removed as one; it was
+also the rate limiter standing between level-polled DRDY and B-020. B-020 had
+been read an hour earlier and the connection was still missed. When removing a
+condition, ask what *else* holds because it is there — and when a symptom
+resembles a logged bug, suspect the most recent change to that code path before
+re-deriving from first principles.
+
+
+### B-009 · True sample rate never confirmed on hardware
+**Found** 2026-09-01 · firmware/hardware · **HIGH** · `OPEN`
+
+**Symptom.** ECG and sine traces come out wrong in the viewer, while the same
+ECG simulator reads correctly on BIOPAC — so the simulator and electrodes are
+good and the fault is in this chain.
+
+**Suspected cause.** The firmware never measures the conversion rate. It derives
+1000 SPS from the CONFIG1 divider *assuming* fCLK = 2.048 MHz, then advertises
+that as fact in every INFO frame. The host builds its entire timebase from that
+number, so a different clock time-scales every trace — a 60 BPM ECG reads as 120,
+and sine frequencies come out wrong, with the sample data itself intact.
+
+The board is **not** the TI ADS1298ECG-FE (see B-007), so its clock source is
+unverified. TI's EVM ships with an *external* 2.048 MHz oscillator selected
+(JP18/JP19/JP23); a clone may use a different crystal or default CLKSEL
+differently.
+
+**Next step.** Instrumentation for this is now in place — B-004 and B-005 below.
+Flash, and read the once-a-second `measured NNNN SPS` line. Anything outside
+950–1050 also raises an explicit warning.
+
+### B-022 · DRDY edge fix killed the stream entirely — my regression
+> **CONCLUSION IN QUESTION (2026-09-07).** The DRDY wire was found loose — see
+> B-034. A pin stuck asserted gives exactly the "one sample then stalls forever"
+> symptom this entry diagnosed as a property of the wiring. Re-test edge
+> detection on a sound connection before relying on "level, not edge".
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · firmware · **CRITICAL** ·
+`FIXED-UNVERIFIED`
+
+**Symptom.** After the B-020 fix: *"nothing is displayed in the UI, not even
+signals."* No data at all, where before there was data with duplicates.
+
+**Root cause.** The B-020 fix replaced level polling with software edge
+detection. That only works if DRDY deasserts between conversions. **A comment
+in that exact loop already said it does not:**
+
+> *"DRDY is held low continuously while a conversion result is pending and does
+> not produce the clean falling edges a GPIO edge-interrupt needs, so the ISR
+> path never advances past the first sample."*
+
+Level polling was a **deliberate workaround** for that, and I removed it without
+reading why it was there. With DRDY stuck asserted, `drdy_asserted && !drdy_prev`
+is true exactly once — one sample, then silence forever.
+
+**Fix.** Level polling restored as the default: duplicates are a degradation,
+silence is not. Edge detection becomes opt-in via `-DEMG_DRDY_EDGE=ON`.
+
+**And stop guessing about DRDY.** The loop now counts, and reports once a second:
+
+```
+drdy: N transitions, asserted on X of Y polls
+```
+
+- `transitions` ≈ 2x the conversion rate → the pin toggles properly, edge
+  detection is safe and fixes B-020's duplicates
+- `transitions` ≈ 0 → DRDY is stuck asserted; edge detection cannot work and the
+  duplicate problem needs a different fix (rate-limiting reads, or finding out
+  why the pin never releases)
+- `asserted on X of Y` → the duty cycle, which shows directly how many polls see
+  the same pending conversion
+
+**Lesson, and it is the second time this session:** *a comment explaining why
+code is written the unobvious way is evidence.* B-017 was shipping unvalidated
+analog changes; this was overriding a documented hardware workaround without
+measuring first. Both would have been avoided by taking the existing note
+seriously.
+
+### B-021 · Channel selection is build-time only — not changeable from the app
+**Found** 2026-09-01 · design gap · **MEDIUM** · `OPEN`
+
+**Symptom.** *"I can't change to any other channel in the software."* Correct,
+and there is no way to: the app renders whatever the DATA frames contain, and
+which channels those are is fixed by `EMG_CHANNEL_MASK` at compile time. The
+per-channel checkboxes only hide and show what is already arriving.
+
+**Why it matters now, not just as polish.** This board is not the TI EVM
+(B-007), so which ADS1298 channel each electrode actually lands on is
+**unverified** (B-010). The natural way to resolve that is to stream all eight
+and look for the one carrying signal — which currently means a rebuild and a
+reflash per attempt.
+
+**Workaround:**
+
+```
+west build -b nucleo_f767zi . -p always -- -DEMG_CHANNEL_MASK=0xFF && west flash
+```
+
+Link cost is not a constraint: 8 channels at 1000 SPS is 24.6 kB/s, **26.7 %** of
+the 921600 link.
+
+| Channels | Frame | Throughput | Link |
+|---|---|---|---|
+| 1 | 116 B | 3.6 kB/s | 3.9 % |
+| 2 | 212 B | 6.6 kB/s | 7.2 % |
+| 4 | 404 B | 12.6 kB/s | 13.7 % |
+| 8 | 788 B | 24.6 kB/s | 26.7 % |
+
+**Proper fix, not yet done:** a host-to-device command path. The firmware has no
+RX handling at all — `emg_stream` is transmit-only. The reference implementation
+in `paper/REFERENCE_NOTES.md` does exactly this: one byte per GUI event over the
+wireless link, selecting sampling rate, per-channel gain and input source at
+runtime. That is the right shape to copy, and it would also make gain, rate and
+the self-test switchable without a reflash.
+
+### B-032 · RDATAC does not latch — reads straddling a conversion return spliced samples
+**Found** 2026-09-02 · **Fixed** 2026-09-02 · firmware · **HIGH** ·
+`FIXED-UNVERIFIED`
+
+**Symptom.** Random pulses persisted after the median filter (B-029) removed
+high-frequency spikes and after interleaved servicing (B-030) removed sample
+loss.
+
+**Found by searching, not by reasoning.** This is a known ADS129x behaviour,
+documented on TI's forums and in the mainline Linux `ti-ads1298` IIO driver.
+
+**Root cause.** In **RDATAC** the device reloads its output shift register the
+instant DRDY falls, and **does not latch**. If a conversion completes while the
+27-byte read is still in flight, the register is overwritten mid-transfer and the
+sample that emerges is spliced from two conversions — a plausible-looking spike,
+at a random moment.
+
+Mike Looijmans, author of the mainline driver, states it directly:
+
+> "This chip doesn't have a buffer, but it does 'latch' the sample data when it
+> receives a RDATA command (hence I use that in favor of RDATAC, which does not
+> latch and might return corrupted data)."
+
+TI's forum agrees: *"in RDATAC mode the ADC will load the output shift register
+with conversion data as soon as DRDY transitions from high to low"*, and
+*"you have to ensure you get all data out of the device between DRDY pulses,
+otherwise you can get corrupted data."*
+
+**Why it hit us specifically.** DRDY is polled by level, so the read can begin at
+any point in the asserted window rather than immediately after the edge. Anything
+that delays it pushes the read towards the next conversion boundary — and the
+three `LOG_INF` lines emitted each second block for ~0.7 ms apiece without
+servicing the ADC, which is enough to do it. Roughly a few corrupted samples per
+second: random, occasional, and exactly what was observed.
+
+**Fix.**
+
+1. **RDATA instead of RDATAC.** `ads_emg_read_rdata_masked()` sends the RDATA
+   opcode and clocks out the frame in a single transaction. RDATA **latches** on
+   the command, so the read is coherent however long it takes or whatever
+   interrupts it. `ads_emg_start_rdata()` starts conversions without entering
+   continuous mode. Costs one byte per sample.
+2. **SPI 2 MHz -> 8 MHz.** The 27-byte read drops from 108 µs to 27 µs. Latching
+   makes the window harmless, but there is no reason to keep it large. Datasheet
+   allows 20 MHz.
+
+**Lesson:** *some problems are known problems.* Three rounds went into
+reproducing, instrumenting and reasoning about this from first principles. A
+search found it stated plainly by the author of the mainline Linux driver.
+Searching should have come earlier — the moment the symptom was "random,
+occasional corruption in a widely-used part."
+
+### B-031 · Livelock: sampling ran, then stopped dead — my regression
+**Found** 2026-09-02 · **Fixed** 2026-09-02 · firmware · **CRITICAL** ·
+`FIXED-UNVERIFIED`
+
+**Symptom.** Sampling runs normally, then stops with no error and no reset.
+
+**Root cause — the bounds guard added in B-030, one message earlier.**
+
+```c
+while (1) {
+    if (!service_adc()) { k_yield(); continue; }   // skips everything below
+    ...
+    if (block_fill >= BLOCK_SAMPLES) { send; block_fill = 0; }
+}
+```
+
+`service_adc()` returns **false** when the block is full — that was the guard,
+added to stop it writing past the array now that it also runs from inside
+`send_frame()`. But the only code that *empties* the block sits below the
+`continue`. So the first time `block_fill` reached `BLOCK_SAMPLES` anywhere
+except the normal path, the loop span forever: taking no samples, sending
+nothing, never resetting.
+
+The trigger is the INFO frame. It is sent once a second at an arbitrary point in
+the block cycle, and its `send_frame()` services the ADC — so if `block_fill` was
+near full at that moment, it tipped over inside there and the guard latched.
+
+**Fix.** No `continue` in the loop at all. `service_adc()`'s result is captured,
+everything below runs on every pass, and the yield moved to the bottom guarded by
+that result. The send path is now unconditionally reachable.
+
+**Lesson, and this is the third time in this log:** *a guard that makes a
+function refuse to act must not sit upstream of the only code that resolves the
+condition it guards against.* B-022 was overriding a documented workaround;
+B-027 was turning a constant into a variable; this was adding a safety check
+without tracing what became unreachable because of it. All three were introduced
+while fixing something real.
+
+### B-030 · Blocking frame writes dropped ~4 % of conversions, every frame
+**Found** 2026-09-02 · **Fixed** 2026-09-02 · firmware · **HIGH** ·
+`FIXED-UNVERIFIED`
+
+**Symptom.** After B-029 removed the high-frequency spikes, **low-frequency
+random pulses** remained.
+
+**Cause — introduced when the ring buffer was removed.** `send_frame()` wrote
+116 bytes with `uart_poll_out()`, which blocks:
+
+```
+116 B at 921600 8N1 = 1.26 ms
+sample period at 1130 SPS = 0.885 ms
+```
+
+So every frame blocked for longer than a sample period. Conversions completing
+during the write were never read, and the ADS1298 overwrites its output register
+— those samples are simply gone. Predicted loss: **~1.4 samples per frame,
+4.4 %, periodically.**
+
+A dropped sample is a hole in a stream the host assumes is uniformly sampled.
+A hole is a step discontinuity, and a step rings through the host's 0.5-40 Hz
+band-pass as a low-frequency bump — which is exactly what a "random low-frequency
+pulse" looks like.
+
+This is the cost of removing the ring buffer, which existed precisely so the
+acquisition loop never waited on the link. The CRC evidence at the time (zero
+errors, zero gaps) correctly said the ring was not *corrupting* data; it said
+nothing about what removing it would cost in *timing*.
+
+**Fix, without reintroducing the ring.** One byte is 10.9 µs against a 885 µs
+sample period, so the ADC can be serviced *between* bytes for no measurable cost.
+Sample handling is factored into `service_adc()`, called both from the main loop
+and from inside `send_frame()`'s write loop. `frame` is already a copy by then,
+so `block` is free to refill — and at ~1.4 samples per send it cannot fill.
+A bounds guard in `service_adc()` covers the case anyway.
+
+**Instrumented, so the fix is checkable rather than argued.** Reported once a
+second:
+
+```
+gaps: N overruns, ~M samples lost, worst U us (nominal 885 us)
+```
+
+Any interval longer than 1.5 sample periods counts as an overrun. Before the fix
+this should show roughly 35 overruns per second (one per frame); after, near
+zero.
+
+**Lesson:** *removing a component removes its purpose too.* The ring was
+justified by "the acquisition loop must never wait on the link", and that
+justification was in the comment. Testing whether the ring corrupted data
+answered a different question than why it was there.
+
+### B-029 · Impulsive artifacts read as beats — 30 BPM source reported 115
+**Found** 2026-09-02 · **Fixed** 2026-09-02 · firmware · **HIGH** ·
+`FIXED-UNVERIFIED (reproduced in test)`
+
+**Symptom.** Occasional "random pulses" in the trace make the app report
+**115 BPM** from a 30 BPM source.
+
+**Reproduced before fixing**, which is the part earlier entries in this log
+skipped. `survivesImpulsiveArtifacts` adds one-sample impulses to a synthetic
+30 BPM ECG:
+
+| Spikes | Reported |
+|---|---|
+| none | 30 BPM ✓ |
+| 2 mV @ 1 Hz | 30 BPM ✓ |
+| 5 mV @ 2 Hz | 30 BPM ✓ |
+| **10 mV @ 2 Hz** | **120 BPM** ✗ |
+
+120 against the reported 115 — close enough to be the same mechanism.
+
+**Why a low-pass alone is the wrong fix, and would have made it worse.** A
+linear filter cannot remove an impulse; it can only spread it. A 1-sample 10 mV
+spike through a 40 Hz low-pass at 1130 SPS emerges as a **~2 mV bump about 25 ms
+wide** — very close to the amplitude and shape of a real QRS. The detector's
+derivative stage then amplifies whatever high-frequency content survives,
+because differentiation multiplies by frequency.
+
+**Fix: median first, then low-pass** (`filters/ecg_filter.{h,c}`).
+
+1. **5-point median** — removes any artifact up to 2 samples wide *completely*.
+   A QRS is ~80 ms, about 90 samples at 1130 SPS, so it passes untouched. This
+   is the stage that actually solves the problem.
+2. **4th-order Butterworth low-pass at 40 Hz** — two cascaded biquads reusing
+   the existing `iir_bandpass()`. 32 dB at 100 Hz, 56 dB at 200 Hz.
+
+Designed against the **measured** rate once it locks (B-026), because the corner
+scales with it: designing at the nominal 1000 SPS would put the real corner at
+45 Hz.
+
+**Costs, stated plainly.** Filtering on the board is destructive — the host gets
+conditioned samples, recordings are no longer raw, and the 40 Hz corner needs a
+reflash to change, so diagnostic ECG (150 Hz) and EMG (450 Hz) are out. Build
+with `-DECG_FILTER=OFF` to stream unconditioned samples and filter on the host,
+where it stays tunable. Flash cost 47388 -> 53768 B.
+
+**Lesson:** *match the filter to the noise, not to the frequency.* The request
+was for a low-pass; the noise was impulsive, and impulsive noise is a
+nonlinear-filter problem. Delivering the low-pass alone would have looked like a
+fix and measurably degraded detection.
+
+### B-028 · Median frequency measured over the EMG band while showing an ECG
+**Found** 2026-09-02 · **Fixed** 2026-09-02 · software · **MEDIUM** ·
+`FIXED-VERIFIED (synthetic)`
+
+**Symptom.** Median frequency reported **70-180 Hz, fluctuating**, on an ECG.
+
+**Root cause.** `computeSpectrum()` hardcoded its analysis band to
+`kBandLowHz = 20 Hz` / `kBandHighHz = 450 Hz` — the SENIAM **surface-EMG** band,
+where median frequency is the standard muscle-fatigue metric.
+
+An ECG's energy lies almost entirely **below 20 Hz**. Measuring from 20 Hz
+upwards therefore excludes the signal completely and reports whatever noise sits
+above it. The 70-180 Hz reading was a correct measurement of the noise floor,
+labelled as if it described the heart — and it fluctuated because broadband noise
+has no stable median.
+
+**Fix.** The band is now a parameter, defaulting to the EMG band, and
+`SpectrumItem` passes the controller's current filter corners — so it follows the
+signal-mode preset that already exists: 20-450 Hz for EMG, 0.5-40 Hz for ECG
+monitor, 0.05-150 Hz for ECG diagnostic.
+
+**Verified** by `medianFollowsTheAnalysisBand`: one signal (1 mV at 10 Hz plus
+40 µV of 120 Hz interference) measured twice. Over the EMG band the median reads
+above 100 Hz — the interference. Over the ECG band it reads ~10 Hz — the signal.
+Same data, and only one answer is about the heart.
+
+**Does not change** what the beat detector sees: `HeartRateDetector` runs its own
+5-15 Hz band-pass and never used this figure. So this fixes a misleading readout,
+not the beat-detection behaviour.
+
+**Lesson:** *a metric carries the band it was defined over.* Median frequency is
+meaningful for EMG because SENIAM defines it over 20-450 Hz; reusing the number
+for a different signal without moving the band produces a confident measurement
+of the wrong thing.
+
+### B-027 · Advertising a moving rate wiped the display repeatedly
+**Found** 2026-09-02 · **Fixed** 2026-09-02 · firmware + software · **HIGH** ·
+`FIXED-UNVERIFIED`
+
+**Symptom.** Straight after B-026: *"now it can't sample, it just like suddenly
+reset."* Sampling appeared to restart over and over.
+
+**Root cause — a two-sided interaction, neither side wrong alone.**
+
+`StreamController::handleInfo()` treated **any** change in the advertised rate as
+grounds to call `reconfigureRing()`, and `SampleRing::configure()` **clears** the
+ring. Harmless while the rate was a fixed constant. B-026 made it a live
+measurement, so every 1 SPS of jitter in the once-a-second count discarded all
+buffered samples and blanked the plot — indistinguishable from a board reset.
+
+The firmware's 2 % hysteresis was not enough: one second of counting is quantised
+to ±1 conversion and moves with loop timing and the blocking UART writes, so at
+~1130 SPS a jitter of ±23 crosses the threshold easily.
+
+**Fix, both sides:**
+
+- **Firmware** averages conversions across a 3 s settling window, sets the rate
+  **once**, and locks it for the session. The host can then rebuild its rings at
+  most once, early, when there is nothing on screen to lose.
+- **Host** rebuilds only on a material change — channel count, or rate moving
+  more than 10 %. The ring is a capacity in samples, so being 10 % out merely
+  changes how many seconds it holds.
+
+**Lesson:** *turning a constant into a measurement changes every consumer that
+assumed it was stable.* The host's "reconfigure on rate change" was correct for
+years precisely because the rate never changed. B-026 was a good fix that
+silently violated an assumption nothing had written down.
+
+### B-026 · Advertised sample rate was assumed, not measured — every rate 13 % low
+**Found** 2026-09-02 · **Fixed** 2026-09-02 · firmware · **HIGH** ·
+`FIXED-UNVERIFIED`
+
+**Symptom.** After B-025 the signal responds to the source correctly, but a
+30 BPM setting reads back as **26-27 BPM** — a consistent ~12 % deficit.
+
+**Root cause.** `EMG_SAMPLE_RATE_HZ` was a *calculation*: HR mode, `fmod_div_512`,
+and an assumed 2.048 MHz fCLK give 1000 SPS. That figure went into every INFO
+frame, and the host derives its whole timebase from it — sample counts divided
+by the advertised rate. A wrong rate scales every frequency and every heart rate
+by the same factor.
+
+**This board does not run at 2.048 MHz.** Three independent measurements agree:
+
+| Source | Implied rate |
+|---|---|
+| 30 BPM read back as 26.5 | 1132 SPS |
+| App link stats | 1120 SPS |
+| Capture `t_ms` deltas (MCU clock) | 1032-1059 SPS |
+
+That implies fCLK near **2.32 MHz**, 13 % above the assumed value and well
+outside the ±5 % the datasheet allows for the internal oscillator — so this
+board is almost certainly clocked from something else. Consistent with it not
+being the TI EVM (B-007).
+
+**Fix.** INFO now advertises the **measured** conversion rate rather than the
+nominal one. The firmware already counted conversions per second for the rate
+report; that number now goes on the wire. Updated only on a change beyond 2 %,
+because the host re-designs its filter coefficients whenever the rate moves and
+should not do that for sampling jitter.
+
+**This is a calibration, not an explanation.** It makes the host correct without
+knowing why the clock is what it is. The clock question is worth answering
+separately — it also sets the ADC's anti-alias corner (sinc³ at 0.262·f_DR), so
+the real bandwidth is ~296 Hz rather than the 262 Hz assumed.
+
+**Lesson:** *a derived constant that nothing checks is an assumption.* The rate
+was correct arithmetic from a wrong premise, and it stayed wrong through every
+layer because each one trusted the one below.
+
+### B-025 · ROOT CAUSE — register writes never took; reference buffer left powered down
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · firmware · **CRITICAL** ·
+`FIXED-UNVERIFIED`
+
+**The decisive observation:** switching the ECG generator on and off changed the
+trace not at all. A signal that does not respond to its own source is not a
+signal — the ADC was not seeing the electrodes.
+
+**Root cause.** Register writes were silently failing. Reads worked throughout
+(`ads_read_id` returned `0x92` every boot), which is what made this invisible
+for so long — SPI was obviously "working".
+
+`spi_write_register()` splits a register write into **two** `spi_write_dt()`
+calls inside one CS assertion: opcode pair, then data. The read path does not —
+`spi_read_register()` sends all three bytes in a single `spi_transceive_dt()`.
+Reads worked; writes did not.
+
+**Why that is fatal rather than merely wrong.** Every register kept its
+power-on default:
+
+| Reg | Reset | Consequence |
+|---|---|---|
+| `CONFIG1` | `0x06` | Low Power, fMOD/1024 = **250 SPS**, not 1000 (this is B-020's 223 SPS) |
+| **`CONFIG3`** | **`0x40`** | **`PD_REFBUF = 0` — the internal reference buffer is POWERED DOWN** |
+| `CONFIG3` | `0x40` | `PD_RLD = 0` — RLD buffer also down, so no mid-supply bias either |
+
+**With no reference, conversions bear no relation to the input.** That is the
+whole symptom: a trace unaffected by the source, unaffected by electrodes, with
+an amplitude (47 mV p-p) nothing like an ECG.
+
+**Fix.** New `spi_write_bytes()` in `bus/src/spi_bus.c` sends a register write as
+**one** transaction — structurally identical to the read path that demonstrably
+works. `write_reg()` now uses it: `{WREG|reg, 0x00, value}` in a single
+`spi_write_dt()`.
+
+**This subsumes several earlier entries.** B-020's 250 SPS was this. The
+unexplained 47 mV amplitude was this. B-013/B-015's varying nonsense rates were
+this. The `ads_emg_verify()` readback added in B-020 is what will confirm it: it
+now has something real to check.
+
+**Lesson:** *"SPI works" is not one fact.* Reads working says nothing about
+writes; they were different code paths with different transaction shapes. The
+readback that would have caught this on day one took twenty minutes to write.
+
+### B-020 · ROOT CAUSE — every conversion transmitted ~5 times, real rate 223 SPS
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · firmware · **CRITICAL** ·
+`FIXED-UNVERIFIED`
+
+**Found in real captured data**, `Record/emg-20260901-161737.emgraw` — the first
+hardware capture analysed this session. Every hypothesis before this was
+speculation; this is measurement.
+
+| | |
+|---|---|
+| Emitted rate (MCU uptime clock) | **1032 SPS** |
+| Distinct conversions in 30 s | **6761** |
+| **Real conversion rate** | **223 SPS** |
+| Mean repeat factor | **4.62x** |
+| Frame gaps / CRC errors | **0** |
+
+Run-length histogram of identical consecutive samples: **5182 runs of exactly 5**,
+943 of exactly 4, 448 of 1. Not noise — systematic duplication.
+
+**Fault 1 — the acquisition loop re-reads the same conversion.** DRDY was polled
+by *level*:
+
+```c
+if (gpio_pin_get_dt(&ads_rdy) == 1) { ads_dev.data_ready = true; }
+```
+
+DRDY stays asserted until the conversion is read, so every loop pass while it is
+low re-arms `data_ready` and reads the same result again. The stream is padded
+with ~4.6 copies of each sample.
+
+**Why nothing caught it.** The CRC covers what was sent. Sequence numbers stay
+contiguous. Frame timing is perfectly regular. The +/-1 mV self-test is ~1 Hz and
+identical on every channel, so duplicated samples are invisible to it (B-005 said
+exactly this). Duplication is only visible in the data itself.
+
+**Fix:** software edge detection — only an idle-to-asserted transition counts.
+
+> **This recurred on 2026-09-07 — see B-033.** The edge fix above was itself
+> reverted by B-022 (it stalls on this wiring), leaving level polling plus an
+> incidental throttle. When that throttle was deleted as part of adding a ring
+> buffer, this bug came straight back at 7337 SPS against a real ~1130. The
+> protection against it is now explicit: `MIN_READ_INTERVAL_US` in `main.c`.
+
+**Fault 2 — CONFIG1 is not taking effect.** 223 SPS is not a rate the intended
+configuration can produce. CONFIG1's **reset value is `0x06`**: `HR = 0`
+(Low Power) and `DR = 110` (fMOD/1024), which in LP mode is
+`2.048 MHz / 8 / 1024` = **250 SPS**. Measured 223 is that figure undercounted,
+because two consecutive conversions that happen to be equal merge into one run.
+
+So the device is running its **power-on default**, not `CONFIG1 = 0xC5`. Writing
+a register is not evidence it took.
+
+**Fix:** `ads_emg_verify()` reads every configuration register back after init
+and logs each mismatch as `CONFIG1: wrote 0xC5, reads 0x06`. Called from `main()`
+before the ID check.
+
+**Together these explain every symptom in this log**: 30 BPM read as 90, 150 and
+11 (a signal stretched by a varying duplicate factor, with a detector firing on
+whatever survived); the sine that would not resolve; and why the timebase looked
+sound from the MCU clock while every derived frequency was wrong.
+
+**Also seen in the capture, minor:** exactly two full-scale single-sample
+glitches (`+8126464`, `-8388608`) among 31264 samples. With duplicates collapsed
+the signal is 1032192 codes p-p (~49 mV) about a 69,700-code mean — far above a
+1 mV ECG, so amplitude still needs explaining once the rate is fixed.
+
+**Verified.** Builds clean. **Not yet run on hardware** — the readback will say
+whether CONFIG1 now takes.
+
+### B-018 · Calibrated sweep made anything above ~10 Hz unviewable — my regression
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · software · **HIGH** ·
+`FIXED-VERIFIED (replay)`
+
+**Symptom.** A 100 Hz sine from the generator renders "a little bit noisy"
+rather than as a sine.
+
+**Root cause — arithmetic, not signal quality.** The B-011 redesign fixed the
+sweep at a clinical 25 mm/s and **removed the 0.05-10 s window slider**. On a
+~4 px/mm display that gives a 9.5 s window:
+
+| Sweep | Window | 100 Hz cycles on screen | px/cycle | |
+|---|---|---|---|---|
+| 12.5 mm/s | 19.0 s | 1900 | 0.50 | unresolvable |
+| **25 mm/s** (was the max useful) | 9.5 s | 950 | **1.00** | **unresolvable** |
+| 50 mm/s | 4.75 s | 475 | 2.00 | unresolvable |
+| 100 mm/s | 2.38 s | 238 | 4.00 | marginal |
+| **250 mm/s** | 0.95 s | 95 | **10.0** | readable |
+
+At one pixel per cycle, min/max decimation paints the full peak-to-peak in every
+column. The result is a **solid filled band — visually identical to noise**,
+however clean the data is. The old 0.05 s window showed 5 cycles across the
+plot; the redesign removed the only control that could get there.
+
+**Fix.** Sweep speeds extended to 12.5 / 25 / 50 / **100 / 250 / 500 mm/s** —
+clinical speeds for ECG morphology, fast ones for signal work. A **`≤ N Hz`
+readout sits beside the sweep selector** showing the highest frequency the
+current setting can draw as a waveform (`pxPerMm x mmPerSec / 10`), amber below
+15 Hz. Always visible, not a conditional warning: the failure is silent, so the
+limit must be readable before you hit it.
+
+Placed next to the sweep control deliberately — appended at the end of the
+toolbar it was pushed off-screen by the documented `RowLayout` overlap trap,
+which is how it was first written and caught in a screenshot.
+
+**Rule:** *at the clinical 25 mm/s the display resolves about 10 Hz.* Correct for
+ECG morphology, useless for a 100 Hz test tone. Raise the sweep to at least
+`f_Hz x 10 / pxPerMm` mm/s.
+
+### B-019 · A 100 Hz test tone lands exactly on the mains-notch 2nd harmonic
+**Found** 2026-09-01 · software · **MEDIUM** · `OPEN — by design, needs a UI cue`
+
+`FilterConfig` defaults to `notchHz = 50`, `notchHarmonics = 2`, so notches sit
+at **50 Hz and 100 Hz** (`EmgFilter.cpp:26-31`, Q = 30). A 100 Hz test tone is
+therefore deliberately removed from the **filtered** path.
+
+The spectrum is unaffected — `spectrumRing()` returns the raw ring
+(`StreamController.h:226`) — and the waveform is unaffected while *Show filtered*
+is off. But with it on, or when reading the **envelope**, a 100 Hz tone is
+attenuated by design and looks absent.
+
+**Workaround:** for a 100 Hz test signal, uncheck *Mains notch*, or set mains to
+60 Hz (harmonics 60/120), or test at a frequency away from 50/100/60/120.
+
+**Still open:** nothing on screen says the notch is eating the signal being
+measured. A cue when a strong spectral peak coincides with a notch would close
+it.
+
+### B-017 · Always-on analog changes shipped unvalidated — my regression
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · firmware · **HIGH** ·
+`FIXED-UNVERIFIED`
+
+**Symptom, as reported:** *"after you change nothing is correct anymore."* Both
+ECG and sine-generator modes wrong, where they had been usable before.
+
+**Root cause — a process failure, not a coding one.** Two changes made this
+session altered how the analog front end behaves **electrically**, were enabled
+**by default**, and could not be validated here:
+
+| Change | Electrical effect | Was |
+|---|---|---|
+| B-001 RLD derivation | closes a feedback loop through electrodes + body | never written, `0x00` |
+| B-014 lead-off detect | **injects 6 nA DC into the inputs being measured** | never written, `0x00` |
+
+Both were introduced as improvements, and both are defensible in isolation. But
+an RLD loop can oscillate depending on electrode impedance and cable
+capacitance, and lead-off current develops a voltage across the source impedance
+in series with the signal. **A diagnostic that alters the signal must not be a
+default**, and stacking two unvalidated analog changes made the result
+un-bisectable.
+
+**Fix.** Both are now opt-in, defaulting to the pre-session electrical
+behaviour — RLDOUT a passive mid-supply bias, no injected current:
+
+```
+west build -b nucleo_f767zi . -- -DEMG_RLD_ACTIVE=ON   # close the RLD loop
+west build -b nucleo_f767zi . -- -DEMG_LEADOFF=ON      # 6 nA integrity detect
+```
+
+Kept always-on, because neither changes analog behaviour: `CONFIG2 = 0x00`
+(datasheet-mandated, B-001), the frame-alignment check (B-002), the static TX
+buffer (B-003), and the rate counter (B-004).
+
+**Rule this establishes:** *a change to analog behaviour that cannot be measured
+here ships OFF.* Digital fixes may default on; anything that alters what the ADC
+actually sees is opt-in until proven on the bench.
+
+**Verified.** Both configurations build clean. **Not yet run on hardware.**
+
+### B-016 · Single-channel masked path was never tested end to end
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · software · **MEDIUM** ·
+`FIXED-VERIFIED (replay)`
+
+**Coverage gap, not a defect — the test found nothing wrong.** Every end-to-end
+host test used `kNCh = 4` contiguous channels (`tst_pipeline`, `emg_gen`), and
+`ch_mask` was exercised only in `tst_frameparser` unit tests. After
+`EMG_ELECTRODES=3` the board streams **one** channel with mask `0x02`, a
+configuration that had never travelled the full pipeline in a test.
+
+**Fix.** `singleMaskedChannelCarriesACleanSine` builds a 10 Hz, 1 mV sine as one
+channel with `ch_mask = 0x02`, replays it, and checks three things a 1 Hz square
+wave cannot: waveform **correlation > 0.99** against the ideal (reordering
+destroys this), amplitude within 10 %, and frequency by zero-crossing within 5 %.
+
+**Result: passes.** Correlation, amplitude and frequency are all correct. The
+host does not corrupt a single masked channel, and does not mis-measure its
+frequency.
+
+**Consequence for B-013/B-015: the host software is exonerated for the "noisy
+sine, wrong frequency" symptom.** Three hypotheses have now been tested and all
+three pass — T-wave miscounting, learning-before-signal, and the single-channel
+masked path. Whatever is corrupting the sine happens **before** the host: in the
+firmware's sampling, or in the analog front end.
+
+**The measurement that separates those two has still not been run:**
+`EMG_RAMP_TEST` (B-005). It substitutes a synthetic counter for ADC data while
+keeping real DRDY pacing, so a broken staircase means the firmware sampling path,
+and a perfect staircase means the fault is analog.
+
+### B-015 · Burst of oscillation on connection — suspected unstable RLD loop I introduced
+**Found** 2026-09-01 · firmware/analog · **HIGH** · `OPEN — A/B TEST READY`
+
+**Symptom.** Flash the board, then switch the simulator on: a **burst of wave**
+appears, unlike the steady trace the same simulator gives on BIOPAC.
+
+**Two software hypotheses tested and REJECTED first**, to avoid guessing again:
+
+- *T-wave multiple-counting at bradycardia* — see B-013. Tests pass with the fix
+  reverted; does not reproduce.
+- *Detector learns before the signal exists.* This models the exact bench order
+  (flash, then power the simulator), so the settling and learning phases run on
+  a silent channel and the signal then arrives as a DC step.
+  `locksOnWhenSignalStartsLate` feeds 5 s of quiet plus a 50 mV step plus 30 BPM
+  ECG and **passes** — the host handles it. Not the cause either.
+
+**What actually changed on the analog side this session.** `git show
+HEAD:src/main.c` contains no `rld_sensp` at all: before this session those
+registers were never written and sat at their `0x00` reset, so RLD was a
+**passive mid-supply bias with no feedback path** — unconditionally stable.
+B-001 closed that loop.
+
+An RLD loop is a real feedback system whose phase margin depends on electrode
+impedance, cable capacitance and the body between them. Under-compensated for
+the hardware in use, it oscillates — and the symptom is a burst appearing the
+instant the electrodes complete the loop. That is a much better fit for
+"burst on connection" than anything in the digital path, and it is a
+**regression I plausibly introduced.**
+
+**A/B test ready:**
+
+```
+west build -b nucleo_f767zi . -p always -- -DEMG_RLD_PASSIVE=ON && west flash
+```
+
+- **burst disappears** → the RLD loop is unstable; the derivation is the cause.
+  Keep passive RLD (costs CMRR, which the notch can partly cover) or add
+  compensation.
+- **burst remains** → RLD is exonerated; the cause is upstream of it, and the
+  capture analysis (`tools/decode_capture.py`) becomes the next step.
+
+### B-014 · No electrode-integrity detection — "noisy" and "unplugged" were indistinguishable
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · firmware · **HIGH** ·
+`FIXED-UNVERIFIED`
+
+**Found by reading** Luiz et al. 2025 (`paper/REFERENCE_NOTES.md`), an ADS129x
+ECG/EMG module close enough to this one to serve as a reference implementation.
+Their system has per-electrode connected/not-connected monitoring; ours had
+none, so every session so far has been unable to distinguish "the signal is
+noisy" from "this electrode is not attached." That ambiguity is the common
+thread through B-012 and B-013.
+
+**The data was already arriving and being discarded.** The 24-bit RDATAC status
+word read on every sample is `1100 | LOFF_STATP[8] | LOFF_STATN[8] | GPIO[4]`.
+`ads_emg_read_frame_masked()` checked the leading nibble for frame alignment
+(B-002) and threw the remaining 20 bits away.
+
+**Fix.** Enable detection and decode what we already receive:
+
+| Reg | Value | Purpose |
+|---|---|---|
+| `LOFF` | `0x03` | DC detection, 6 nA source, 95 % threshold |
+| `CONFIG4` | `0x02` | `PD_LOFF_COMP` — power the comparators |
+| `LOFF_SENSP` | `EMG_CHANNEL_MASK` | monitor the streamed channels |
+| `LOFF_SENSN` | `EMG_CHANNEL_MASK` | monitor the streamed channels |
+
+Status word retained in `ads129x_dev.status`; `ADS129x_STATUS_LOFFP/LOFFN/GPIO`
+decode it; `main.c` warns once a second naming the offending electrodes.
+
+**Trap carried over from the paper:** its published Table 1 sets
+`LOFF_SENSP = LOFF_SENSN = 0x00`, which powers the comparators while monitoring
+no channel at all. Copying that table verbatim yields a lead-off feature that
+silently always reports "fine". We set them to the streamed-channel mask.
+
+**Verified.** Builds clean. **Not yet run on hardware.**
+
+### B-013 · 30 BPM source reads 90 BPM, then drops out — CAUSE NOT FOUND
+**Found** 2026-09-01 · software/firmware · **HIGH** · `OPEN`
+
+**Symptom.** Simulator set to 30 BPM. Viewer briefly shows **90 bpm** — exactly
+3x — then the reading disappears.
+
+**Hypothesis tested and REJECTED: T-wave multiple-counting.** The detector has a
+fixed 200 ms refractory and no T-wave discrimination, and a T wave lands
+300-400 ms after the QRS — outside that window. At 30 BPM that would produce
+exactly the observed 3x. It looked conclusive.
+
+**It is not the cause.** New tests
+(`doesNotMultiplyCountAtBradycardia`, `staysLockedThroughSlowBeats`) drive 30, 40
+and 50 BPM with T waves up to 2.5x normal height, and **pass with the fix
+reverted**. Synthetic bradycardia with a tall T does not reproduce it. The two
+changes made while chasing this — a rate-adaptive refractory and a
+bradycardia-safe stuck timeout — are kept as **hardening, not as a fix**; they
+are not credited with solving anything. The tests are kept as forward coverage,
+with the caveat that **they did not catch this bug and so do not guard it**.
+
+**Still-live candidates, in order:**
+
+1. **B-012 was not yet flashed when this was observed.** The RLD loop was still
+   deriving from a floating LL, contaminating every channel. A detector locking
+   briefly onto contaminated signal and then being refused by the SNR gate in
+   `bpm()` produces exactly "a number, then nothing". **Retest after flashing
+   before investigating anything else.**
+2. **B-009, the timebase.** 30 read as 90 is precisely what a 3x-fast host
+   timebase produces — i.e. a true sample rate of ~333 SPS while the INFO frame
+   advertises 1000. The `measured NNNN SPS` line added in B-004 answers this
+   directly and **has not yet been read back.**
+3. **B-002 rejecting valid frames.** If the RDATAC status-word check discards 2
+   of every 3 frames, the effective rate is 1/3 — the same 3x, from a bug I
+   introduced. `frame_sync_errors` would log every second. Also answered by the
+   console.
+
+All three are distinguished by two numbers already printed once a second on the
+console. **Read those before writing more code.**
+
+### B-012 · RLD derived from a DISCONNECTED electrode — contaminated every channel
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · firmware · **CRITICAL** ·
+`FIXED-UNVERIFIED`
+
+**Symptom.** With a simulator set to 30 BPM and RA/LA/RL connected, neither
+LEAD I nor LEAD II showed a detectable beat — both were "more noise". The host's
+QRS detector was not at fault: `tst_heartrate` covers 30 BPM explicitly and
+passes.
+
+**Root cause — two faults, the second much worse than the first.**
+
+1. **LEAD II = LL − RA, and LL was never connected.** CH3 had an open positive
+   input. This front end is DC-coupled, so an open PGA input drifts to a rail
+   and streams full-scale mash. One dead trace — expected, once noticed.
+
+2. **The right-leg drive was deriving from that same floating input.** The
+   config set `RLD_SENSP = 0x06` = IN2P(LA) **+ IN3P(LL)**, and
+   `WCT2 = 0xD4` put WCTC on IN3P(LL). RLD sums its selected inputs and drives
+   the result back into the body through RL, so a disconnected electrode's
+   pickup was being injected into the common-mode feedback — **contaminating
+   every channel, including the LEAD I whose own electrodes were fine.**
+
+That is why both leads looked like noise when only one of them was actually
+mis-wired. This is the risk logged as B-010, realised.
+
+**Fix.** New `EMG_ELECTRODES` build switch (default **3**), which selects the
+channel mask and the RLD/WCT derivation together so they cannot disagree:
+
+| | 3 = RA, LA, RL | 4 = RA, LA, LL, RL |
+|---|---|---|
+| Channels | CH2 (LEAD I) | CH2, CH3 (LEAD I, II) |
+| `RLD_SENSP` | `0x02` IN2P(LA) | `0x06` IN2P + IN3P |
+| `RLD_SENSN` | `0x02` IN2N(RA) | `0x02` IN2N(RA) |
+| `WCT1`/`WCT2` | `0x00` powered down | `0x0B` / `0xD4` |
+
+WCT is powered down on 3 electrodes because there are no precordial channels to
+reference to it and WCTC would otherwise be driven from the floating LL.
+Encodings pinned by `BUILD_ASSERT`.
+
+**Rule this establishes:** *derive RLD only from electrodes that are physically
+attached.* An unattached input in the RLD loop is not neutral — it is an
+antenna wired into the feedback path.
+
+**Verified.** Both configurations build clean. **Not yet run on hardware.**
+
+### B-010 · RLD/WCT presets hardcode the TI EVM electrode map
+**Found** 2026-09-01 · firmware · **MEDIUM** · `OPEN`
+
+`ADS129x_ECG_*_3LEAD` in `drivers/inc/ads129x.h` encodes `IN2P=LA, IN2N=RA,
+IN3P=LL` (RLD_SENSP=0x06, RLD_SENSN=0x02, WCT1=0x0B, WCT2=0xD4) — the TI EVM
+wiring. The bench board is not that board (B-007). If it routes electrodes
+differently, the right-leg drive is derived from the wrong pins, and a
+wrongly-derived RLD loop can *inject* common-mode noise rather than cancel it.
+
+**Safe fallback if suspected:** RLD buffer enabled with no derivation
+(`rld_sensp = rld_sensn = 0`), WCT powered down (`wct1 = wct2 = 0`). Passive
+mid-supply bias — cannot make anything worse.
+
+**Partly addressed by B-012**, which stopped the presets referencing electrodes
+that are not attached. Still open in the sense that the *pin mapping itself*
+(IN2P=LA, IN2N=RA, IN3P=LL) remains unverified on this non-TI board.
+
+---
+
+### B-024 · Busy-poll loop starves the log thread — output stops after the banner
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · firmware · **HIGH** ·
+`FIXED-UNVERIFIED`
+
+**Symptom.** With the UART backend restored (B-023), the boot banner prints and
+then nothing — no register verification, no samples, no rate.
+
+**Root cause.** Deferred logging queues messages for a log thread at priority 14;
+`main` runs at 0. The acquisition loop busy-polls DRDY and yields with
+`k_yield()`, **which only schedules threads of equal or higher priority**. Once
+the loop starts, the log thread never runs again and every message queues
+forever.
+
+The banner appeared only because `k_msleep()` during the reset pulse gave the
+log thread a window before the loop began.
+
+**This exact trap is documented in this codebase** — the streaming firmware's
+own header records that a TX *thread* could not be used "because the acquisition
+loop busy-polls DRDY with `k_yield()` which never schedules lower-priority
+threads." The same mechanism, applied to logging, and not recognised.
+
+**Fix.** `CONFIG_LOG_MODE_IMMEDIATE=y`. Output is written synchronously by the
+calling thread, so it cannot depend on scheduling. Cost is ~0.9 ms per 80-char
+line at 921600 and ten lines a second — under 1 % of loop time, against a
+guarantee that diagnostics actually appear.
+
+The old comment argued *against* immediate mode on the grounds that it costs
+~6 ms per line at 115200. That figure is for 115200; this console runs at
+**921600**, eight times faster, and prints ten lines a second rather than
+continuously.
+
+**Note the pairing with B-023.** Two independent faults both produced silence:
+no backend compiled, and a starved log thread. Fixing either alone still gives
+nothing, which is why the first fix looked like it had failed.
+
+### B-023 · The firmware has emitted NO log output since 2026-08-19
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · firmware · **CRITICAL** ·
+`FIXED-UNVERIFIED`
+
+**Symptom.** Nothing printed on the console at all, not even the boot banner,
+not even after a reset.
+
+**Root cause.** `prj.conf` set `CONFIG_LOG_BACKEND_UART=n`, with a comment
+explaining that `proto/src/emg_log_backend.c` replaced it — a custom backend
+that routes log text through `emg_stream`'s ring so it cannot interleave with a
+binary frame mid-transmission. The reasoning is correct and the file exists.
+
+**But `emg_log_backend.c` was never listed in `target_sources`.** The original
+CMakeLists compiled only `emg_frame.c` and `emg_stream.c`. So the stock backend
+was disabled and the replacement was never built: **the firmware emitted no log
+output whatsoever**, from whenever that line was added (file dated 2026-08-19)
+until now.
+
+**Consequence for this entire log.** Every diagnostic added this session printed
+into nothing:
+
+- `measured NNNN SPS (nominal 1000)` — B-004
+- `drdy: N transitions, asserted on X of Y polls` — B-022
+- `CONFIG1: wrote 0xC5, reads 0x06` — B-020
+- `electrode OFF: P=0x.. N=0x..` — B-014
+- `RDATAC status word misaligned` — B-002
+
+I asked repeatedly for those lines. **They could not have appeared.** That is
+the reason several rounds of this investigation ran on speculation rather than
+measurement, and it was findable at any point by checking whether the backend
+that prints them was compiled in.
+
+**Fix.** `CONFIG_LOG_BACKEND_UART=y`. Correct for the minimal firmware, where
+nothing else writes the UART. If the streaming firmware is restored, either add
+`proto/src/emg_log_backend.c` to `target_sources` **and** set this back to `n`,
+or keep the stock backend and accept occasional CRC losses — but not the
+current combination, which silently discards everything.
+
+**Rule:** *a disabled subsystem plus a replacement that is not built is silence,
+and silence looks identical to "no problem to report."* When a config disables
+something standard on the grounds that custom code replaces it, verify the
+replacement is in the build.
+
+## Firmware: streaming restored on the minimal base (2026-09-01)
+
+`src/main.c` is 238 lines and streams **all 8 channels at 1000 SPS** to the Qt
+app over the existing framed protocol. It keeps the minimal firmware's
+configuration exactly — RLD as a passive bias with no derivation, WCT off,
+lead-off off, DRDY polled by level — and keeps both diagnostics: the register
+readback (B-020) and the measured conversion rate.
+
+**`proto/src/emg_log_backend.c` is now in `target_sources`** — the omission that
+caused B-023. Verified present in the linked image (`nm | grep emg_log` finds
+12 symbols), not merely listed in the build file. With it compiled,
+`CONFIG_LOG_BACKEND_UART=n` is correct again: console text and binary frames
+share one UART with the ring as the single writer.
+
+Logging stays **IMMEDIATE** (B-024): the custom backend queues from the calling
+thread, so output never depends on a log thread the busy-poll loop would starve.
+
+Link budget: 788-byte frames, 31/s, 24.6 kB/s — **27 %** of 921600.
+
+## Firmware reset to minimal read (2026-09-01)
+
+`src/main.c` was rewritten as a **minimal read**: configure, read, print. 740
+lines to 203. The framed-streaming application is preserved at
+`examples/main_streaming.c` and `proto/` is untouched on disk — it is simply not
+built (the host test suite still compiles `emg_frame.c` directly).
+
+**Why.** The firmware had accumulated six build options — self-test, ramp test,
+lead-off, RLD active, DRDY edge, channel mask — and several were mutually
+interacting. Two regressions in this log (B-017, B-022) came from that
+combination space, not from any single change. One behaviour cannot be put into
+a wrong combination.
+
+**What it does now:** HR mode, 1000 SPS, gain 6, internal 2.4 V reference,
+normal electrode input. RLD buffer on with **no derivation** (a bias, not a
+feedback loop — it cannot oscillate and cannot be fed a detached electrode).
+WCT and lead-off **off** — both drive into the front end and neither is needed
+to read a differential pair. DRDY polled by **level**, per B-022.
+
+**What it keeps, because both answer open questions:** the register readback
+(B-020's `CONFIG1: wrote 0xC5, reads 0x06`), and a conversions-per-second count
+printed every 5 s. It prints **all eight channels** in microvolts at ten lines a
+second, because which channel an electrode reaches is a property of this board
+and is still unverified (B-007, B-010) — printing all of them lets it be read
+off the terminal rather than assumed.
+
+**Still open and now easier to answer:** B-020 (CONFIG1 not taking, real rate
+223 SPS), B-013/B-015 (signal quality), B-010 (channel mapping).
+
+## FIXED
+
+### B-011 · Trace unreadable — uncalibrated sweep, no rate readout
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · software · **HIGH** ·
+`FIXED-VERIFIED (replay)`
+
+**Symptom.** "Too fast to see how many beats per second." Beats could not be
+counted from the display.
+
+**Root cause.** The time axis was an abstract "window in seconds" slider scaled
+to whatever the widget happened to be wide. Ten seconds across a narrow plot
+puts beats a few pixels apart, where the eye cannot separate them — and nothing
+on screen stated the scale, so the trace could not be measured even in
+principle. The computed heart rate existed but was buried in a per-channel
+statistics row, in the same type size as everything else.
+
+**Fix.**
+- **Millimetre-calibrated sweep** from `Screen.pixelDensity`. Selectable
+  12.5 / 25 / 50 mm/s, default **25 mm/s** (diagnostic standard). The window is
+  now derived from the sweep speed and plot width, not the reverse.
+- **Calibrated gain** 5 / 10 / 20 mm/mV, default **10 mm/mV**. Auto-scale now
+  defaults **off** — a silently rescaling trace and a stated mm/mV are
+  contradictory claims.
+- **ECG chart-paper grid** (`qml/EcgGrid.qml`): 1 mm minor, 5 mm major. At
+  25 mm/s one major square is 0.20 s, so rate is countable by eye
+  (300 / major squares between R peaks). Minor grid is suppressed below
+  3 px/mm, where it would wash out the trace.
+- **Vitals bar** (`qml/VitalsBar.qml`): heart rate at 42 px, refreshed at 1 Hz
+  rather than bound to the stream (a rate flickering several times a second is
+  unreadable, and real monitors settle at ~1 Hz). Shows "— —" not 0 when there
+  is no rate — a displayed zero reads as measured bradycardia. Rhythm-lead
+  selector defaults to index 1 (LEAD II, the conventional rhythm lead).
+  Calibration is printed as `25 mm/s · 10 mm/mV`, as on a clinical strip.
+- `StreamController` gained `sweepMmPerSec` / `gainMmPerMv` so the scope and
+  the vitals bar cannot disagree about the calibration they display.
+
+**Verified.** Builds clean; **8 suites pass**. Replay of a synthetic 72 BPM ECG
+renders **HR 72 bpm**, grid, and calibration correctly — screenshot-confirmed.
+**Caveat:** the waveform area itself photographs blank under `--grab` (the known
+scene-graph artifact in `software/CLAUDE.md`), so the trace geometry was
+verified through the HR readout and live channel values, **not visually**.
+Confirm the trace by eye before relying on it.
+
+### B-005 · Self-test is blind to every ordering fault
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · firmware · **HIGH** ·
+`FIXED-UNVERIFIED`
+
+**Symptom.** The ±1 mV self-test was reported — by me — as proving "the entire
+digital chain including the channel transpose". It does not, and that
+over-claim wrongly eliminated the buffer path from suspicion.
+
+**Root cause.** The test signal is ~1 Hz sampled at 1 kSPS and **identical on
+every channel**. Within one 32-sample frame (32 ms of a ~1020 ms period) every
+sample holds the same value, and every channel holds the same data. So a clean
+square wave is consistent with:
+
+| Fault | Visible? |
+|---|---|
+| Channel interleave / transpose error | **No** — all channels identical |
+| Sample reordering inside a block | **No** — 32 consecutive samples are equal |
+| Duplicated or dropped samples | **No** — reads as a duty-cycle shift |
+| Wrong sample rate | Only if the period was actually measured |
+
+It proves bit-level SPI transfer, framing, CRC, UART and host decode. Nothing
+about ordering.
+
+**Fix.** Added `EMG_RAMP_TEST` (`-DEMG_RAMP_TEST=ON`): substitutes a per-sample
+counter for the ADC data while keeping real DRDY pacing. Each channel plots as a
+sawtooth offset by `EMG_RAMP_CH_OFFSET` (100000 codes), wrapping every
+`EMG_RAMP_PERIOD` (1000) samples.
+
+- break in the staircase → reordering, duplication or loss
+- wrong channel offsets → transpose or interleave error
+- sawtooth period ≠ 1.000 s → true rate is not 1000 SPS
+
+**Verified.** Builds clean both ways. **Not yet run on hardware.**
+
+### B-004 · Nothing measured the actual conversion rate
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · firmware · **HIGH** ·
+`FIXED-UNVERIFIED`
+
+**Root cause.** The rate was assumed from the divider, never counted. See B-009
+for why that matters.
+
+**Fix.** `src/main.c` counts DRDY-driven reads in `samples_this_period` and
+reports the real figure once a second, dividing by the *actual* elapsed interval
+rather than assuming exactly 1000 ms. Outside ±5 % it logs a warning naming the
+likely cause. Independent of framing, UART and host, so it isolates ADC timing.
+
+**Verified.** Builds clean. **Not yet run on hardware.**
+
+### B-003 · Frame buffer consumed 76 % of the acquisition stack
+**Found** 2026-09-01 · **Fixed** 2026-09-01 · firmware · **MEDIUM** ·
+`FIXED-UNVERIFIED`
+
+**Root cause.** `emg_stream_send_data()` declared
+`uint8_t frame[EMG_FRAME_MAX_SIZE]` — **1556 bytes** (worst case 8 ch × 64
+samples) — as an automatic, against `CONFIG_MAIN_STACK_SIZE=2048`. A real frame
+here is 212 bytes, so the buffer was ~7× oversized, leaving roughly 230 bytes of
+margin for everything below the call. Latent silent-corruption risk, not the
+current symptom (the self-test uses the same path and came through clean).
+
+**Fix.** Made the buffer `static`. Safe: one calling thread, and
+`emg_stream_queue()` copies into the ring synchronously before returning.
+Documented as **not reentrant** — a second caller needs its own buffer.
+
+**Verified.** Builds clean; RAM 13952 → 15 KB as the allocation moved from stack
+to BSS, which is the intended effect.
+
+### B-002 · No RDATAC frame-alignment check
+**Found** 2026-08-31 · **Fixed** 2026-08-31 · firmware · **MEDIUM** ·
+`FIXED-UNVERIFIED`
+
+**Root cause.** Nothing checked that the 27-byte readback started where assumed.
+Misaligned frames do not look broken — every channel receives a mixture of its
+neighbours' bytes, decoding to large, fast, plausibly biological noise.
+
+**Fix.** `ads_emg_read_frame_masked()` rejects any frame whose status byte is not
+`0xCn` (datasheet §9.4.1.3.1: the status word's leading nibble is `1100`) and
+returns `-EIO`; `main.c` counts them and reports once a second.
+
+**Caveat.** The datasheet figure showing the status word did not extract to text;
+the `1100` prefix is from the standard ADS129x encoding plus surrounding prose.
+If this ever produces *no data* plus a warning every second, the assumption is
+wrong — remove the check.
+
+**Verified.** Builds clean. Never observed firing.
+
+### B-001 · CONFIG2 was never written — reserved bits left set
+**Found** 2026-08-31 · **Fixed** 2026-08-31 · firmware · **MEDIUM** ·
+`FIXED-UNVERIFIED`
+
+**Root cause.** `ads_emg_init()` wrote CONFIG1, CONFIG3 and CHnSET but skipped
+CONFIG2 entirely. It resets to `0x40`, and datasheet §9.6.1.4 marks bits 7:6
+RESERVED, "always write 0h" — so the part ran with a reserved bit set.
+
+**Fix.** CONFIG2 is now written explicitly (`0x00` for normal acquisition), and
+`ads_emg_init()` was restructured around a `write_reg()` helper instead of the
+aliased-`spi_buf` pattern. Same commit added the never-written `RLD_SENSP`,
+`RLD_SENSN`, `WCT1`, `WCT2` — see B-010.
+
+**Verified.** Builds clean. Packed register bytes pinned by `BUILD_ASSERT`.
+
+---
+
+## Process findings (not code defects, but each cost real time)
+
+### B-008 · `kicad-cli pcb drc` on a copy silently uses default rules
+**Found** 2026-08-03 · **Fixed** 2026-08-03 (documented) · PCB · **HIGH**
+
+Netclasses and the custom `.kicad_dru` resolve **relative to the board file**.
+DRC on a copy in `/tmp` reported 111 violations where in-place reported 78, which
+invalidated a whole set of published numbers. **Always DRC in place.**
+Now in `CLAUDE.md` and `WORKFLOW.md` §3.3.
+
+### B-007 · Board identity assumed from a datasheet lying in the repo
+**Found** 2026-09-01 · hardware · **HIGH**
+
+`datasheet/sbau171d.pdf` (TI ADS1298ECG-FE) is in this repo, so it was assumed to
+describe the bench board — and that board's electrode map was written into
+firmware register presets. The real board has **JP36** and a populated **D11**;
+all 57 pages of SBAU171D contain only JP1–JP33 and D1–D10, every diode marked
+"Not installed". A datasheet in the repo is not evidence of what is on the bench.
+Now `WORKFLOW.md` §2.1 and memory `ads1298-board-is-not-ti-evm`.
+
+### B-006 · Days lost to an EMG filter preset applied to an ECG
+**Found** 2026-09-01 · software · **HIGH**
+
+"Random sinewave noise" was the host's EMG band-pass (20–450 Hz) applied to an
+ECG. That corner sits on the QRS and strips the P wave, ST segment and most of
+the T wave. **Diagnostic:** a square wave rendered as a *decaying sinusoid* is
+the step response of a band-pass, not a broken ADC. Check configuration before
+hardware — `WORKFLOW.md` §6.2.

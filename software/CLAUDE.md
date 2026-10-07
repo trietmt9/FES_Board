@@ -1,0 +1,310 @@
+# FES_Board — host software
+
+Qt 6 / QML desktop application that receives the biopotential stream from the
+board, plots it, records it, replays it and diagnoses the link.
+
+Design rationale and the **normative wire protocol** live in
+[`ARCHITECTURE.md`](ARCHITECTURE.md). This file is the working guide: how to
+build it, what the conventions are, and which mistakes have already been made
+here so they are not made again.
+
+Hardware context is in the repository-root `CLAUDE.md`. The firmware is a
+**separate git repository** at `../firmware/`.
+
+## Status, honestly
+
+Everything below is **verified against synthetic data only. Nothing in this tree
+has ever run against the board.** Treat every "works" as "works in replay".
+
+Two hardware facts that block real validation, both outside this tree:
+
+- **`WCT1`/`WCT2` are never written by the firmware**, so the Wilson Central
+  Terminal amplifiers stay powered down. On the ADS1298ECG-FE that leaves the
+  negative input of CH1 and CH4–CH8 undriven. Only **LEAD I (CH2)** and
+  **LEAD II (CH3)** are usable.
+- **`RLD_SENSP`/`RLD_SENSN` are never written**, so RLDOUT provides a mid-supply
+  DC bias but no active common-mode feedback. Costs CMRR.
+
+## The UI is a rebuild to `Biosignal Monitor - Qt Spec.md` (2026-10-05)
+
+The viewer was rebuilt to the written spec **"BioView Monitor"** in this folder.
+The mockup HTML the spec refers to is **not in the repo** - only the prose exists,
+so anything the prose does not pin down is my reading of it. Deviations and why:
+[`SPEC_COMPLIANCE.md`](SPEC_COMPLIANCE.md). The previous UI is in
+`emg-viewer.pre-qt-spec.tar.gz` (and `CLAUDE.md.pre-qt-spec` is the old guide).
+
+**Real data only.** Anything the firmware does not measure shows `-` rather than a
+number: PR/QRS/QTc intervals, battery, electrode impedance. Do not "fill in" a
+metric to match the mockup.
+
+## Layout
+
+```
+software/
+  ARCHITECTURE.md        protocol (normative); its section 6 predates the rebuild
+  SPEC_COMPLIANCE.md     where the rebuild departs from the spec, and why
+  emg-viewer/
+    CMakeLists.txt       one file: libs, app, tools, tests
+    src/core/            protocol, filters, FFT, SpectrumEngine, SampleRing. No Qt Quick.
+    src/io/              serial + replay sources, recorder (off the GUI thread)
+    src/model/           Acquisition, SignalModel, DeviceManager, LogModel (QML singletons)
+    src/ui/              render items - see "Drawing" below
+    qml/                 Theme + Header / SignalRail / WavePanel / ChannelRow /
+                         MetricsPanel / WifiDialog / Diagnostics
+    resources/           Inter + Phosphor fonts (tools/make_fonts.py regenerates them)
+    tools/emg_gen.c      synthetic capture generator (--eeg, --ecg, ...)
+    tests/               14 suites
+```
+
+## Drawing: static layer under a GPU layer
+
+QPainter cannot stroke a trace fast enough here: **77 ms for one 1480-vertex row
+with its glow** (475 ms at 5000 vertices) against a 16 ms frame, ~100 % of a core.
+So each plot is two items:
+
+| Static (QPainter, repainted only on change) | Moving (scene graph, `QSGVertexColorMaterial`) |
+|---|---|
+| `WaveItem` - grid, markers, offline text | `WaveTrace` - line, glow, sweep band, head dot |
+| `SpectrumItem` (`Grid`) - grid, Hz labels, EEG bands | `SpectrumTrace` - curve, area fill, bars, glow, peak dot |
+| `SpectrumItem` (`Chip`) - peak label, stacked *above* the curve | |
+
+Anti-aliasing without a shader (none available in this Qt): `trace::stroke` builds an
+opaque core plus a 1 px alpha skirt per segment, with premultiplied vertex colours.
+Everything that decides **where a pixel lands** is a pure function in
+`TraceGeometry` / `SpectrumLayout.h` and is tested on numbers (`tst_tracegeometry`),
+not by hunting for coloured pixels. Measured: ECG 8.5 %, EEG time 14 %, EEG
+frequency 13.8 % (was 32 %), EMG frequency 3.6 % of one core.
+
+**All rows are drawn against one `SignalModel::displayHead()`** captured once per
+frame. Rows that read the ring's write counter themselves were 112-119 ms apart, so
+leads carrying the same beat came out staggered. `tst_waveitem` guards this.
+
+## Build and test
+
+```bash
+sudo apt install qt6-base-dev qt6-declarative-dev qt6-serialport-dev \
+                 cmake ninja-build            # qt6-serialport-dev is easy to miss
+
+cd emg-viewer
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+
+cd build && QT_QPA_PLATFORM=offscreen ctest --output-on-failure
+```
+
+Baseline: **14 suites; every one passes except `heartrate`**, which already failed
+before the rebuild (the detector, untouched). Any other failure is new breakage.
+
+| Suite | Cases | Guards |
+|---|---|---|
+| `frameparser` | 33 | Wire protocol, cross-checked against the firmware's own encoder |
+| `spectrum` | 18 | FFT vs the O(n^2) DFT, Parseval, Welch amplitude |
+| `spectrumengine` | 22 | The display spectrum: Hann, EMA, dB axis, peak, EEG band powers |
+| `emgfilter` | 21 | Butterworth band-pass + notch, steady-state priming |
+| `heartrate` | 33 | QRS detection 30-180 BPM (**has a known failure**) |
+| `resample` | 10 | Band-limited reconstruction |
+| `samplering` | 8 | `readEndingAt`, wrap, overwrite |
+| `sampleloss` | 7 | Drop accounting |
+| `tracegeometry` | 32 | Pixel-exact amplitude and time axis, stroke/fill/disc geometry |
+| `signalmodel` | 28 | HR / alpha / RMS from real replays, gain, windows, rows |
+| `waveitem` | 7 | Model -> geometry end to end, markers, shared head, offline |
+| `wifiaddress` | 40 | Wi-Fi tab: address validation, what is remembered, Connect never claims a link |
+| `replay` | 6 | 60 s end to end, injected drops/corruption, recorder round-trip |
+| `pipeline` | 7 | source -> filter -> rings wiring; checked against an independent NumPy run |
+
+**Prove a test can fail.** The scale, marker and shared-head tests were each
+mutation-checked: revert the fix, watch the test go red, restore it. Two earlier
+tests passed for the wrong reason (a tolerance that could never match; a helper that
+returned `bool` from a `QTRY_` macro), so a green test here means little until it
+has been seen failing.
+
+Running the app:
+
+```bash
+./build/bin/emg-viewer --port ttyACM0 --baud 921600
+./build/bin/emg-viewer --replay session.emgraw --window 3
+./build/bin/emg-viewer --replay s.emgraw --grab shot.png --grab-delay 8000
+```
+
+Test data without hardware — `emg_gen` links the **firmware's** encoder, so its
+output is byte-identical to what the board emits:
+
+```bash
+./build/bin/emg_gen s.emgraw 30 --rate 4000                 # EMG bursts
+./build/bin/emg_gen s.emgraw 25 --ecg --bpm 75 --mv 1.0     # ECG
+./build/bin/emg_gen s.emgraw 25 --drift 900 --hum 40        # bury it in artifact
+./build/bin/emg_gen s.emgraw 30 --drop 50 --corrupt 100     # fault injection
+```
+
+> **Stale below this line.** The sections from here through "Open items" were
+> written for the pre-rebuild UI and still name `StreamController`, `ScopeView.qml`,
+> `EcgGrid.qml` and `EmgCheckBox.qml`, **none of which exist any more** (the model is
+> `Acquisition` + `SignalModel`). What still holds: the shared wire protocol, "filter
+> on the stream, not per repaint", raw recording, the signal-processing decisions, and
+> the test-hygiene lessons. "The display is millimetre-calibrated" is **superseded**:
+> the spec uses fixed windows (2.5 / 5 / 10 s) and fixed gains, not mm/s.
+
+## Conventions that must hold
+
+**The protocol is shared with the firmware.** `firmware/proto/emg_frame.{h,c}`
+and `src/core/{EmgProtocol,Crc16,FrameParser}` are two halves of one spec.
+`tst_frameparser` compiles the firmware's C encoder directly and decodes it with
+the host parser, and `static_assert`s every duplicated constant. **Change both
+sides in the same commit** or that test fails to build — which is the point.
+
+**Threading.** `StreamController` is the only place that knows about threads.
+
+- The IO thread parses, filters and writes to the rings. It never touches QML.
+- The hot path never crosses a queued connection. Signals carry metadata only,
+  about once per second.
+- Cross-thread numbers (envelope, BPM) go through `std::atomic` banks.
+- The GUI thread only ever *reads* rings.
+
+**Filtering runs on the stream, in the IO thread** — never per-repaint over a
+display window, which would restart the IIR transient every frame.
+
+**Two rings, always both filled.** The waveform reads filtered or raw per the
+display toggle; the **spectrum always reads raw**, because a spectrum with the
+notch already applied hides the mains spike you opened it to find. Recording is
+**always raw**.
+
+**Recorded `.emgraw` is byte-exact.** Bytes are forwarded to the recorder before
+parsing, so the file includes log text and anything the parser rejected.
+
+## Traps already hit here
+
+Each of these cost real time. None is obvious from the code.
+
+**QML singleton silently degrades if the `.qml` files sit in a subdirectory of
+the module.** `qmldir` lives at the module root, so each file's implicit
+same-directory import resolves its siblings *without* qmldir and drops
+`singleton`. Every property then reads `undefined`, arithmetic on them becomes
+`NaN`, and the layout engine spins at **100% CPU with a 10×10 window and no error
+message**. Fixed with `QT_RESOURCE_ALIAS` per file. Diagnostic:
+`QT_LOGGING_RULES="qt.qml.import=true"` prints `TYPE/URL` instead of
+`TYPE/URL-SINGLETON`.
+
+**Qt 6.4 is the baseline and lacks 6.5 conveniences.** No `loadFromModule()`, no
+`singletonInstance(uri, name)` — resolve the type id first. `RESOURCE_PREFIX`
+defaults to `/` rather than `/qt/qml`; it is pinned explicitly in CMakeLists.
+
+**A `RowLayout` that runs out of width overlaps its children rather than eliding
+them.** `Layout.minimumWidth: 0` is not enough. Remove content instead — that is
+why the filter controls live in the sidebar and `Range` hides when autoscale is
+on.
+
+**Qt Quick Controls Basic draws control text from the *application* palette, and
+`QGuiApplication::setPalette` does not reach `CheckBox`.** Its label rendered
+near-black and invisible. Use `EmgCheckBox.qml`, which overrides `contentItem`.
+
+**A header-only `QObject` must be listed in the target's sources** or AUTOMOC
+never processes it and the link fails (`ISampleSource.h`).
+
+**`FilterConfig::enabled` selects only what the *display* reads.** It must not
+gate `ChannelFilter::process()`. When it did, the filtered ring received raw
+samples whenever the display was raw, and the envelope silently reverted to
+measuring electrode drift.
+
+**The envelope divides its running sum by *filled* slots**, so it is valid from
+sample one. The window length therefore governs response to *change*, not the
+startup ramp — test it as a step response with the window already full.
+
+**Freezing the display must snapshot the rings**, not bookmark a read position:
+the producer keeps writing and within one ring capacity overwrites the samples
+being examined. And the render items must **keep repainting while frozen, slowly**
+— stopping leaves the item permanently clean, so the next scene-graph
+invalidation (resize, re-expose, `grabWindow()`) renders it blank.
+
+**Tests can pass for the wrong reason.** When `FilterConfig::enabled` defaulted
+to false, `passbandIsFlat` still passed — raw passthrough trivially satisfies
+"the signal passes". Response tests must explicitly opt into filtering.
+
+**Do not sample a fast-changing value off `statsUpdated`.** It is throttled to
+1 Hz of wall clock; during a 20× replay it fires once or twice for an entire
+capture. An early `tst_pipeline` "measured" a flat envelope that was in fact
+swinging 10:1.
+
+## Traps from the rebuild (Qt 6.4.2)
+
+- **Not available in 6.4:** `QtQuick.Effects` (no blur/shadow - `Shadow.qml` and
+  `Glow.qml` fake them with layered translucent shapes), `QtQuick.Shapes`, the SVG
+  image plugin (icons are the Phosphor font), `ShaderTools`, `font.features`
+  (hence the separate "Inter Tabular" family for tabular figures).
+- **A QML singleton with a default constructor is built with it and `create()` is
+  ignored** (6.4). `Acquisition` / `SignalModel` / `DeviceManager` therefore have
+  *no* default constructor and `static_assert` it - otherwise QML silently gets a
+  second, disconnected instance and the diagnostics drawer shows nothing.
+- **Model role names must not collide with item properties** (`icon`, `text`):
+  `LogModel`'s role is `line`.
+- `QML_ELEMENT` types need `import EmgViewer` in every QML file except `Theme`.
+- **Sources are UTF-8.** `QString::fromLatin1("·")` gives mojibake; use `fromUtf8`.
+- **Do not reset the engines on every INFO frame** - the firmware repeats it each
+  second, and resetting blanked the EEG/EMG metrics. Reset only on a material change.
+- **A sample stamped at the head is one past the right edge.** The newest sample is
+  `head - 1`; a marker on `head` is drawn off-screen.
+- **The Wi-Fi tab is UI before the link.** It validates and remembers the address; Connect
+  says "not built yet". `--preview-wifi manual|searching|connecting|connected|nodata|error`
+  (with `--open-devices` to see the dialog) shows every state; the example address
+  192.168.4.37 and device FES-nRF7002 are review data, never saved. The spec's palette
+  has **no warning colour**, so "no data" and errors are told apart by words and icon.
+  Design: `WIFI_DESIGN.md`.
+- Shortcuts (1/2/3, F, M, Space, D) are **not verified by real key events**: this
+  window manager refuses `SetInputFocus` to `xdotool`. They are plain `Shortcut`
+  items in `Main.qml`; try them by hand.
+
+## The display is millimetre-calibrated (2026-09-01)
+
+The time axis is **not** a free window. Sweep speed is fixed in mm/s against
+`Screen.pixelDensity`, and `StreamController.windowSeconds` is *derived* from it
+and the plot width — see the `Binding` in `ScopeView.qml`. Reversing that
+(setting a window and letting the trace scale) is what made beats uncountable.
+
+- **25 mm/s and 10 mm/mV are the defaults** because they are what every ECG is
+  read at, and what a trained eye is calibrated to.
+- **Auto-scale defaults off.** A trace that silently rescales cannot be measured
+  against the grid; visible clipping is better than an unstated gain.
+- `EcgGrid.qml` draws 1 mm minor / 5 mm major squares. At 25 mm/s a major square
+  is 0.20 s — that is the affordance that makes rate countable without waiting
+  for the computed number.
+- Both calibration values live on `StreamController`, not in the view, so the
+  scope and the vitals bar cannot disagree about what they are showing.
+- The vitals readout refreshes at **1 Hz**, deliberately. It shows `— —` rather
+  than `0` when there is no rate: a displayed zero reads as measured
+  bradycardia.
+
+## Signal-processing decisions worth not re-litigating
+
+- **Band-pass is mandatory, not polish.** The AFE is DC-coupled, so raw traces
+  carry millivolts of offset over ~100 µV of muscle.
+- **EMG 20–450 Hz; ECG 0.5–40 or 0.05–150 Hz.** The EMG preset *destroys* an ECG:
+  a 20 Hz high-pass sits on the QRS and removes the P wave, ST segment and most
+  of the T wave.
+- **Surface EMG legitimately looks like random noise.** Stochastic interference
+  pattern, no repeating morphology. The information is in the envelope.
+- **Min/max decimation, never stride-sampling** when zoomed out — stride drops
+  exactly the motor-unit spikes. **Band-limited reconstruction** when zoomed in,
+  never sample-and-hold.
+- **A Fourier transform cannot make sampled data continuous.** Reconstruction is
+  `core/Resample.h`; frequency analysis is `core/Spectrum.h`. Unrelated.
+
+## Open items
+
+Roughly in the order they become useful:
+
+1. **Run it against the board.** Everything here is replay-verified only.
+2. **Per-channel clipping indicator** — flag samples within a few percent of
+   ±8 388 607. Saturation is the real health signal; sign is not.
+3. **Enable WCT and RLD sense in firmware** (`WCT1`/`WCT2`, `RLD_SENSP/N`), and
+   write `CONFIG2 = 0x00` — the datasheet says bits 7:6 must be written 0 while
+   reset leaves them set.
+4. **Confirm the FES_Board jack→channel mapping on hardware.** The UI's
+   `FES_Board` labelling is the schematic's intent, unverified. The
+   `ADS1298 EVM` scheme is documented (SBAU171 Table 2) and correct.
+5. **Envelope as a first-class output** — streamed or logged, for FES control.
+6. **USB CDC ACM transport.** Frame format unchanged, so no host work.
+7. Session notes/annotations; multi-window layouts.
+
+## Commit style
+
+Matches the root repository: uppercase verb, colon, short subject.
+`ADD:`, `DESIGN:`, `FIX:`. Example: `ADD: ECG mode and heart rate`.

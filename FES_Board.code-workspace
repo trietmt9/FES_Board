@@ -1,0 +1,22 @@
+{
+    "folders": [
+        {
+            "name": "firmware (Zephyr)",
+            "path": "firmware"
+        },
+        {
+            "name": "FESboard (KiCad)",
+            "path": "FESboard"
+        },
+        {
+            "name": "datasheets",
+            "path": "datasheet"
+        }
+    ],
+    "settings": {
+        "files.associations": {
+            "*.h": "c",
+            "*.c": "c"
+        }
+    }
+}

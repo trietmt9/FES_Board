@@ -1,0 +1,753 @@
+{
+    "$schema": "https://schemas.kicad.org/drc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-09-14T16:28:29",
+    "ignored_checks": [
+        {
+            "description": "Footprint has no courtyard defined",
+            "key": "missing_courtyard"
+        },
+        {
+            "description": "Track endpoint not centered on via",
+            "key": "track_not_centered_on_via"
+        },
+        {
+            "description": "Tuning profile track geometries",
+            "key": "tuning_profile_track_geometries"
+        },
+        {
+            "description": "Footprint doesn't match symbol's footprint filters",
+            "key": "footprint_filters_mismatch"
+        },
+        {
+            "description": "Footprint component type doesn't match footprint pads",
+            "key": "footprint_type_mismatch"
+        }
+    ],
+    "included_severities": [
+        "error",
+        "warning",
+        "exclusion"
+    ],
+    "kicad_version": "10.0.6",
+    "schematic_parity": [
+        {
+            "description": "Extra footprint",
+            "items": [
+                {
+                    "description": "Footprint H2",
+                    "pos": {
+                        "x": 186.525,
+                        "y": 59.225
+                    },
+                    "uuid": "820cfcf7-01a5-4be3-9969-22defa15687d"
+                }
+            ],
+            "severity": "warning",
+            "type": "extra_footprint"
+        },
+        {
+            "description": "Extra footprint",
+            "items": [
+                {
+                    "description": "Footprint H4",
+                    "pos": {
+                        "x": 186.525,
+                        "y": 129.775
+                    },
+                    "uuid": "aa9e0173-52ab-4dbf-9ec3-f958a1ec4810"
+                }
+            ],
+            "severity": "warning",
+            "type": "extra_footprint"
+        },
+        {
+            "description": "Extra footprint",
+            "items": [
+                {
+                    "description": "Footprint H1",
+                    "pos": {
+                        "x": 112.475,
+                        "y": 59.225
+                    },
+                    "uuid": "cebb4d32-5aef-40d6-b400-07d45e9cb200"
+                }
+            ],
+            "severity": "warning",
+            "type": "extra_footprint"
+        },
+        {
+            "description": "Extra footprint",
+            "items": [
+                {
+                    "description": "Footprint H3",
+                    "pos": {
+                        "x": 112.475,
+                        "y": 129.775
+                    },
+                    "uuid": "d58b2dd1-ad9a-47f5-b087-f0da3a4ecf61"
+                }
+            ],
+            "severity": "warning",
+            "type": "extra_footprint"
+        }
+    ],
+    "source": "FESboard.kicad_pcb",
+    "unconnected_items": [],
+    "violations": [
+        {
+            "description": "Differential pair gap out of range (in_pair_gap minimum gap 0.2000 mm; actual 0.1500 mm)",
+            "items": [
+                {
+                    "description": "Track [/IN1P] on F.Cu, length 2.8757 mm",
+                    "pos": {
+                        "x": 133.633883,
+                        "y": 99.71967
+                    },
+                    "uuid": "0439bd08-62b6-4cd2-8e15-75114f1c5256"
+                },
+                {
+                    "description": "Track [/IN1N] on F.Cu, length 3.3156 mm",
+                    "pos": {
+                        "x": 135.578378,
+                        "y": 97.209489
+                    },
+                    "uuid": "ff132298-92bf-45c6-938b-2ca79018f223"
+                }
+            ],
+            "severity": "error",
+            "type": "diff_pair_gap_out_of_range"
+        },
+        {
+            "description": "Differential pair gap out of range (in_pair_gap minimum gap 0.2000 mm; actual 0.1500 mm)",
+            "items": [
+                {
+                    "description": "Track [/IN1P] on F.Cu, length 0.7929 mm",
+                    "pos": {
+                        "x": 132.75,
+                        "y": 102.646447
+                    },
+                    "uuid": "21a89971-c73f-4203-8da7-51e209566135"
+                },
+                {
+                    "description": "Track [/IN1N] on F.Cu, length 0.9586 mm",
+                    "pos": {
+                        "x": 132.35,
+                        "y": 102.646446
+                    },
+                    "uuid": "ee9f5d41-f4c8-4ab4-a1ae-74a40cda1029"
+                }
+            ],
+            "severity": "error",
+            "type": "diff_pair_gap_out_of_range"
+        },
+        {
+            "description": "Differential pair gap out of range (in_pair_gap minimum gap 0.2000 mm; actual 0.1500 mm)",
+            "items": [
+                {
+                    "description": "Track [/IN1P] on F.Cu, length 1.0349 mm",
+                    "pos": {
+                        "x": 131.646447,
+                        "y": 103.75
+                    },
+                    "uuid": "285e750d-0341-46ca-8f87-bac258235f8f"
+                },
+                {
+                    "description": "Track [/IN1N] on F.Cu, length 0.8642 mm",
+                    "pos": {
+                        "x": 131.646446,
+                        "y": 103.35
+                    },
+                    "uuid": "1e2af8fe-ef26-4b6a-a552-337065f5cd85"
+                }
+            ],
+            "severity": "error",
+            "type": "diff_pair_gap_out_of_range"
+        },
+        {
+            "description": "Differential pair gap out of range (in_pair_gap minimum gap 0.2000 mm; actual 0.1500 mm)",
+            "items": [
+                {
+                    "description": "Track (arc) [/IN1P] on F.Cu, length 0.8667 mm",
+                    "pos": {
+                        "x": 131.6464,
+                        "y": 102.6464
+                    },
+                    "uuid": "95bf3e8c-91ec-4dc5-972d-bfdefe72ac84"
+                },
+                {
+                    "description": "Track (arc) [/IN1N] on F.Cu, length 0.5526 mm",
+                    "pos": {
+                        "x": 131.6464,
+                        "y": 102.6464
+                    },
+                    "uuid": "c77f6223-4093-44bc-82af-f3255cb205f1"
+                }
+            ],
+            "severity": "error",
+            "type": "diff_pair_gap_out_of_range"
+        },
+        {
+            "description": "Differential pair gap out of range (in_pair_gap minimum gap 0.2000 mm; actual 0.1500 mm)",
+            "items": [
+                {
+                    "description": "Track (arc) [/IN1P] on F.Cu, length 0.8667 mm",
+                    "pos": {
+                        "x": 131.6464,
+                        "y": 102.6464
+                    },
+                    "uuid": "d802f64d-9c52-4636-ab79-c6cd011cb304"
+                },
+                {
+                    "description": "Track (arc) [/IN1N] on F.Cu, length 0.5526 mm",
+                    "pos": {
+                        "x": 131.6464,
+                        "y": 102.6464
+                    },
+                    "uuid": "5bcf755e-36fc-4746-9a80-f70d3bedfbea"
+                }
+            ],
+            "severity": "error",
+            "type": "diff_pair_gap_out_of_range"
+        },
+        {
+            "description": "Differential uncoupled length too long (in_pair_uncoupled maximum uncoupled length 5.0000 mm; actual 18.9437 mm)",
+            "items": [
+                {
+                    "description": "Track [/IN1P] on F.Cu, length 2.8757 mm",
+                    "pos": {
+                        "x": 133.633883,
+                        "y": 99.71967
+                    },
+                    "uuid": "0439bd08-62b6-4cd2-8e15-75114f1c5256"
+                },
+                {
+                    "description": "Track [/IN1N] on F.Cu, length 0.0699 mm",
+                    "pos": {
+                        "x": 122.4575,
+                        "y": 103.02
+                    },
+                    "uuid": "003d3ae8-31e5-4392-9700-0bddf13ce85e"
+                }
+            ],
+            "severity": "error",
+            "type": "diff_pair_uncoupled_length_too_long"
+        },
+        {
+            "description": "Differential pair gap out of range (in_pair_gap minimum gap 0.2000 mm; actual 0.1500 mm)",
+            "items": [
+                {
+                    "description": "Track [/IN1P] on F.Cu, length 2.8757 mm",
+                    "pos": {
+                        "x": 133.633883,
+                        "y": 99.71967
+                    },
+                    "uuid": "0439bd08-62b6-4cd2-8e15-75114f1c5256"
+                },
+                {
+                    "description": "Track [/IN1N] on F.Cu, length 3.3156 mm",
+                    "pos": {
+                        "x": 135.578378,
+                        "y": 97.209489
+                    },
+                    "uuid": "ff132298-92bf-45c6-938b-2ca79018f223"
+                }
+            ],
+            "severity": "error",
+            "type": "diff_pair_gap_out_of_range"
+        },
+        {
+            "description": "Differential pair gap out of range (in_pair_gap minimum gap 0.2000 mm; actual 0.1500 mm)",
+            "items": [
+                {
+                    "description": "Track [/IN1P] on F.Cu, length 0.7929 mm",
+                    "pos": {
+                        "x": 132.75,
+                        "y": 102.646447
+                    },
+                    "uuid": "21a89971-c73f-4203-8da7-51e209566135"
+                },
+                {
+                    "description": "Track [/IN1N] on F.Cu, length 0.9586 mm",
+                    "pos": {
+                        "x": 132.35,
+                        "y": 102.646446
+                    },
+                    "uuid": "ee9f5d41-f4c8-4ab4-a1ae-74a40cda1029"
+                }
+            ],
+            "severity": "error",
+            "type": "diff_pair_gap_out_of_range"
+        },
+        {
+            "description": "Differential pair gap out of range (in_pair_gap minimum gap 0.2000 mm; actual 0.1500 mm)",
+            "items": [
+                {
+                    "description": "Track [/IN1P] on F.Cu, length 1.0349 mm",
+                    "pos": {
+                        "x": 131.646447,
+                        "y": 103.75
+                    },
+                    "uuid": "285e750d-0341-46ca-8f87-bac258235f8f"
+                },
+                {
+                    "description": "Track [/IN1N] on F.Cu, length 0.8642 mm",
+                    "pos": {
+                        "x": 131.646446,
+                        "y": 103.35
+                    },
+                    "uuid": "1e2af8fe-ef26-4b6a-a552-337065f5cd85"
+                }
+            ],
+            "severity": "error",
+            "type": "diff_pair_gap_out_of_range"
+        },
+        {
+            "description": "Differential pair gap out of range (in_pair_gap minimum gap 0.2000 mm; actual 0.1500 mm)",
+            "items": [
+                {
+                    "description": "Track (arc) [/IN1P] on F.Cu, length 0.8667 mm",
+                    "pos": {
+                        "x": 131.6464,
+                        "y": 102.6464
+                    },
+                    "uuid": "95bf3e8c-91ec-4dc5-972d-bfdefe72ac84"
+                },
+                {
+                    "description": "Track (arc) [/IN1N] on F.Cu, length 0.5526 mm",
+                    "pos": {
+                        "x": 131.6464,
+                        "y": 102.6464
+                    },
+                    "uuid": "c77f6223-4093-44bc-82af-f3255cb205f1"
+                }
+            ],
+            "severity": "error",
+            "type": "diff_pair_gap_out_of_range"
+        },
+        {
+            "description": "Differential pair gap out of range (in_pair_gap minimum gap 0.2000 mm; actual 0.1500 mm)",
+            "items": [
+                {
+                    "description": "Track (arc) [/IN1P] on F.Cu, length 0.8667 mm",
+                    "pos": {
+                        "x": 131.6464,
+                        "y": 102.6464
+                    },
+                    "uuid": "d802f64d-9c52-4636-ab79-c6cd011cb304"
+                },
+                {
+                    "description": "Track (arc) [/IN1N] on F.Cu, length 0.5526 mm",
+                    "pos": {
+                        "x": 131.6464,
+                        "y": 102.6464
+                    },
+                    "uuid": "5bcf755e-36fc-4746-9a80-f70d3bedfbea"
+                }
+            ],
+            "severity": "error",
+            "type": "diff_pair_gap_out_of_range"
+        },
+        {
+            "description": "Differential uncoupled length too long (in_pair_uncoupled maximum uncoupled length 5.0000 mm; actual 15.5769 mm)",
+            "items": [
+                {
+                    "description": "Track [/IN2P] on F.Cu, length 0.2687 mm",
+                    "pos": {
+                        "x": 127.535,
+                        "y": 84.31
+                    },
+                    "uuid": "0e032fc4-c353-4429-9b91-8f2ab45ecedf"
+                },
+                {
+                    "description": "Track (arc) [/IN2N] on F.Cu, length 0.3486 mm",
+                    "pos": {
+                        "x": 124.5501,
+                        "y": 83.4238
+                    },
+                    "uuid": "02f838a6-4083-43b6-8a74-7e42ccbe27c3"
+                }
+            ],
+            "severity": "error",
+            "type": "diff_pair_uncoupled_length_too_long"
+        },
+        {
+            "description": "Track width (rule 'switch_node_width_range' min width 0.4000 mm; actual 0.2500 mm)",
+            "items": [
+                {
+                    "description": "Track [Net-(L1-Pad1)] on F.Cu, length 1.3400 mm",
+                    "pos": {
+                        "x": 157.34,
+                        "y": 118.5
+                    },
+                    "uuid": "108c1bfc-cf96-4f50-95e1-6449bd2404e8"
+                }
+            ],
+            "severity": "error",
+            "type": "track_width"
+        },
+        {
+            "description": "Track width (rule 'switch_node_width_range' min width 0.4000 mm; actual 0.2500 mm)",
+            "items": [
+                {
+                    "description": "Track [Net-(L1-Pad1)] on F.Cu, length 0.5000 mm",
+                    "pos": {
+                        "x": 155.2125,
+                        "y": 119.2875
+                    },
+                    "uuid": "243bd485-053a-47f3-abe8-fa593ff4811f"
+                }
+            ],
+            "severity": "error",
+            "type": "track_width"
+        },
+        {
+            "description": "Track width (rule 'switch_node_width_range' min width 0.4000 mm; actual 0.2500 mm)",
+            "items": [
+                {
+                    "description": "Track [Net-(L1-Pad1)] on F.Cu, length 0.4066 mm",
+                    "pos": {
+                        "x": 155.7125,
+                        "y": 118.7875
+                    },
+                    "uuid": "397ee0a1-5426-4682-9f56-ffbfc807d3c6"
+                }
+            ],
+            "severity": "error",
+            "type": "track_width"
+        },
+        {
+            "description": "Track width (rule 'switch_node_width_range' min width 0.4000 mm; actual 0.2500 mm)",
+            "items": [
+                {
+                    "description": "Track [Net-(L1-Pad1)] on F.Cu, length 0.5000 mm",
+                    "pos": {
+                        "x": 154.7125,
+                        "y": 119.2875
+                    },
+                    "uuid": "65353a29-61bd-4669-9a98-35568ad12bb3"
+                }
+            ],
+            "severity": "error",
+            "type": "track_width"
+        },
+        {
+            "description": "Track width (rule 'switch_node_width_range' min width 0.4000 mm; actual 0.2500 mm)",
+            "items": [
+                {
+                    "description": "Track [Net-(L1-Pad1)] on F.Cu, length 0.5000 mm",
+                    "pos": {
+                        "x": 155.7125,
+                        "y": 119.2875
+                    },
+                    "uuid": "9132a569-f1bc-4e54-91b9-090b88a5171b"
+                }
+            ],
+            "severity": "error",
+            "type": "track_width"
+        },
+        {
+            "description": "Track width (rule 'switch_node_width_range' min width 0.4000 mm; actual 0.2500 mm)",
+            "items": [
+                {
+                    "description": "Track [Net-(L1-Pad1)] on F.Cu, length 0.4066 mm",
+                    "pos": {
+                        "x": 155.2125,
+                        "y": 118.7875
+                    },
+                    "uuid": "97dcb1c3-9ce0-45c5-b1e4-b1aa8ddc31e6"
+                }
+            ],
+            "severity": "error",
+            "type": "track_width"
+        },
+        {
+            "description": "Track width (rule 'switch_node_width_range' min width 0.4000 mm; actual 0.2500 mm)",
+            "items": [
+                {
+                    "description": "Track [Net-(L1-Pad1)] on F.Cu, length 1.0076 mm",
+                    "pos": {
+                        "x": 158.0525,
+                        "y": 117.7875
+                    },
+                    "uuid": "b011f36e-d598-4469-9e19-c16b1fe49849"
+                }
+            ],
+            "severity": "error",
+            "type": "track_width"
+        },
+        {
+            "description": "Track width (rule 'switch_node_width_range' min width 0.4000 mm; actual 0.2500 mm)",
+            "items": [
+                {
+                    "description": "Track [Net-(L1-Pad1)] on F.Cu, length 0.5000 mm",
+                    "pos": {
+                        "x": 155.5,
+                        "y": 118.5
+                    },
+                    "uuid": "b90399f5-8a27-4442-9375-40e0b48c4bad"
+                }
+            ],
+            "severity": "error",
+            "type": "track_width"
+        },
+        {
+            "description": "Track width (rule 'switch_node_width_range' min width 0.4000 mm; actual 0.2500 mm)",
+            "items": [
+                {
+                    "description": "Track [Net-(L1-Pad1)] on F.Cu, length 0.5000 mm",
+                    "pos": {
+                        "x": 155.0,
+                        "y": 118.5
+                    },
+                    "uuid": "ef105837-9714-4952-b7b7-902323879dcc"
+                }
+            ],
+            "severity": "error",
+            "type": "track_width"
+        },
+        {
+            "description": "Track width (rule 'switch_node_width_range' min width 0.4000 mm; actual 0.2500 mm)",
+            "items": [
+                {
+                    "description": "Track [Net-(L1-Pad1)] on F.Cu, length 0.4066 mm",
+                    "pos": {
+                        "x": 154.7125,
+                        "y": 118.7875
+                    },
+                    "uuid": "f9695e85-5339-44da-8b17-55e1c38f071f"
+                }
+            ],
+            "severity": "error",
+            "type": "track_width"
+        },
+        {
+            "description": "Hole size out of range (board setup constraints min hole 0.3000 mm; actual 0.2000 mm)",
+            "items": [
+                {
+                    "description": "PTH pad 17 [GND] of U3",
+                    "pos": {
+                        "x": 155.5525,
+                        "y": 120.16
+                    },
+                    "uuid": "85d4eb2b-4089-4e17-baca-b9a04d441708"
+                }
+            ],
+            "severity": "error",
+            "type": "drill_out_of_range"
+        },
+        {
+            "description": "Hole size out of range (board setup constraints min hole 0.3000 mm; actual 0.2000 mm)",
+            "items": [
+                {
+                    "description": "PTH pad 17 [GND] of U3",
+                    "pos": {
+                        "x": 154.3725,
+                        "y": 120.16
+                    },
+                    "uuid": "3e3088c0-a56c-4965-b7ed-9c304de252f1"
+                }
+            ],
+            "severity": "error",
+            "type": "drill_out_of_range"
+        },
+        {
+            "description": "Hole size out of range (board setup constraints min hole 0.3000 mm; actual 0.2000 mm)",
+            "items": [
+                {
+                    "description": "PTH pad 17 [GND] of U3",
+                    "pos": {
+                        "x": 155.5525,
+                        "y": 121.34
+                    },
+                    "uuid": "6570670c-bd1d-432c-846f-3187af880b1b"
+                }
+            ],
+            "severity": "error",
+            "type": "drill_out_of_range"
+        },
+        {
+            "description": "Hole size out of range (board setup constraints min hole 0.3000 mm; actual 0.2000 mm)",
+            "items": [
+                {
+                    "description": "PTH pad 17 [GND] of U3",
+                    "pos": {
+                        "x": 154.3725,
+                        "y": 121.34
+                    },
+                    "uuid": "1597e949-4f97-4749-809d-debc6fc5f6b9"
+                }
+            ],
+            "severity": "error",
+            "type": "drill_out_of_range"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of L1 on F.Silkscreen",
+                    "pos": {
+                        "x": 157.5425,
+                        "y": 117.162779
+                    },
+                    "uuid": "46e17f34-dcbe-4ee8-be4f-caca562e4a1d"
+                },
+                {
+                    "description": "Reference field of C13",
+                    "pos": {
+                        "x": 158.275,
+                        "y": 116.8375
+                    },
+                    "uuid": "b7885e0c-78da-471e-b3e6-58e349be02e7"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of L1 on F.Silkscreen",
+                    "pos": {
+                        "x": 158.5625,
+                        "y": 117.162779
+                    },
+                    "uuid": "967ae921-8d64-4e7a-a233-9e983e68c0da"
+                },
+                {
+                    "description": "Reference field of C13",
+                    "pos": {
+                        "x": 158.275,
+                        "y": 116.8375
+                    },
+                    "uuid": "b7885e0c-78da-471e-b3e6-58e349be02e7"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Reference field of L1",
+                    "pos": {
+                        "x": 159.5525,
+                        "y": 117.0
+                    },
+                    "uuid": "236f30fe-df2a-4d78-b0aa-1c6d3a6f071c"
+                },
+                {
+                    "description": "Reference field of C13",
+                    "pos": {
+                        "x": 158.275,
+                        "y": 116.8375
+                    },
+                    "uuid": "b7885e0c-78da-471e-b3e6-58e349be02e7"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clipped by solder mask",
+            "items": [
+                {
+                    "description": "Reference field of R17",
+                    "pos": {
+                        "x": 158.575,
+                        "y": 120.9375
+                    },
+                    "uuid": "4f701d97-998f-4247-84c9-024db4525db0"
+                },
+                {
+                    "description": "Pad 1 [VCC] of C25 on F.Cu",
+                    "pos": {
+                        "x": 158.9625,
+                        "y": 121.7625
+                    },
+                    "uuid": "7ea56418-8560-4410-9318-18d9f29529af"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_over_copper"
+        },
+        {
+            "description": "Silkscreen clipped by solder mask",
+            "items": [
+                {
+                    "description": "Reference field of C14",
+                    "pos": {
+                        "x": 158.475,
+                        "y": 118.5375
+                    },
+                    "uuid": "ba8cfffb-49e5-41ed-9283-4815b09c1726"
+                },
+                {
+                    "description": "Pad 1 [Net-(L1-Pad1)] of L1 on F.Cu",
+                    "pos": {
+                        "x": 158.0525,
+                        "y": 117.7875
+                    },
+                    "uuid": "112aa24b-a410-424e-af4d-180eaa55d6be"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_over_copper"
+        },
+        {
+            "description": "Silkscreen clipped by solder mask",
+            "items": [
+                {
+                    "description": "Reference field of C13",
+                    "pos": {
+                        "x": 158.275,
+                        "y": 116.8375
+                    },
+                    "uuid": "b7885e0c-78da-471e-b3e6-58e349be02e7"
+                },
+                {
+                    "description": "Pad 2 [+3.3V] of L1 on F.Cu",
+                    "pos": {
+                        "x": 158.0525,
+                        "y": 116.2125
+                    },
+                    "uuid": "4e2907b0-9f49-4d60-a246-a28679afc3c7"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_over_copper"
+        },
+        {
+            "description": "Via is not connected or connected on only one layer",
+            "items": [
+                {
+                    "description": "Via [+3.3V] on F.Cu - B.Cu",
+                    "pos": {
+                        "x": 181.5,
+                        "y": 86.0
+                    },
+                    "uuid": "65954f01-f60f-4908-8ca0-c78cc59eeea0"
+                }
+            ],
+            "severity": "warning",
+            "type": "via_dangling"
+        },
+        {
+            "description": "Via is not connected or connected on only one layer",
+            "items": [
+                {
+                    "description": "Via [+3.3V] on F.Cu - B.Cu",
+                    "pos": {
+                        "x": 154.5,
+                        "y": 99.49
+                    },
+                    "uuid": "ef9a591c-c147-4557-9903-0b7c53ca3c3d"
+                }
+            ],
+            "severity": "warning",
+            "type": "via_dangling"
+        }
+    ]
+}

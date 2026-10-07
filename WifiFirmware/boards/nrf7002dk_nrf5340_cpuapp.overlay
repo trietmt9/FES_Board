@@ -1,0 +1,89 @@
+/*
+ * Devicetree overlay — nRF7002DK, nRF5340 application core.
+ *
+ * Picked up AUTOMATICALLY by the build: Zephyr looks for
+ * boards/<board target with / replaced by _>.overlay, so building
+ * `-b nrf7002dk/nrf5340/cpuapp` loads exactly this file. Rename it and it is
+ * silently ignored with no warning, which is an easy half-hour to lose.
+ *
+ * Nothing in here is REQUIRED — the DK's own board files already describe the
+ * nRF7002 completely (QSPI on P0.13-P0.18, iovdd-ctrl P0.31, bucken P0.12,
+ * host-irq P0.23, coex on P0.24/28/29/30) and the scan in src/main.c works
+ * with this file empty. It exists as the correct place to put app-specific
+ * hardware changes, and the examples below are the ones you are actually
+ * likely to reach for while learning.
+ *
+ * To check what the overlay actually did, read the merged devicetree:
+ *   build/zephyr/zephyr.dts
+ * That is the ground truth — never assume an override landed.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Example 1 — slow the QSPI bus down.
+ *
+ * The DK runs the nRF7002 link at 24 MHz. If the radio fails to initialise
+ * (no Wi-Fi interface at boot) this is the first thing to try: a slower bus
+ * rules out signal-integrity problems before you suspect firmware. Also worth
+ * doing on a custom board whose QSPI routing is longer than the DK's.
+ * --------------------------------------------------------------------------- */
+/*
+&nrf70 {
+	qspi-frequency = <8000000>;
+};
+*/
+
+/* ---------------------------------------------------------------------------
+ * Example 2 — 2.4 GHz only.
+ *
+ * The DK board file includes nrf70_common_5g.dtsi, which sets the 5 GHz
+ * transmit-power limits and makes the part dual-band. Dropping to 2.4 GHz only
+ * halves scan time and saves power. There is no node to override for this —
+ * it is a Kconfig choice, so it belongs in prj.conf, not here:
+ *
+ *   CONFIG_NRF70_2_4G_ONLY=y
+ *
+ * Noted in the overlay anyway because this is where people look for it first.
+ * --------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------
+ * Example 3 — turn off Bluetooth/Wi-Fi coexistence.
+ *
+ * The DK enables the coex interface so a Bluetooth controller on the network
+ * core can arbitrate for the radio. With no Bluetooth in this app it does
+ * nothing, but disabling it frees P0.24/P0.28/P0.29/P0.30 if you want them as
+ * plain GPIO for probing.
+ * --------------------------------------------------------------------------- */
+/*
+&nrf_radio_coex {
+	status = "disabled";
+};
+*/
+
+/* ---------------------------------------------------------------------------
+ * Example 4 — a scan-activity LED.
+ *
+ * The DK already provides led0/led1 aliases, so nothing needs adding to use
+ * them from C:
+ *
+ *   static const struct gpio_dt_spec led =
+ *           GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+ *
+ * You would only add a node here for an LED the board does NOT have — for
+ * example one wired to a header pin:
+ * --------------------------------------------------------------------------- */
+/*
+/ {
+	leds {
+		compatible = "gpio-leds";
+
+		scan_led: led_scan {
+			gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+			label = "Scan activity";
+		};
+	};
+
+	aliases {
+		scan-led = &scan_led;
+	};
+};
+*/

@@ -1,0 +1,203 @@
+# FESboard — custom electrical design rules
+# Focus: protecting the ADS1298 (U2) analog electrode input path.
+#
+# Netclasses referenced here are defined in Board Setup > Net Classes.
+#
+# The clearance rules below are written with mutually exclusive netclass
+# conditions, so at most one matches any given pair of objects and
+# precedence between rules never comes into play. Keep that property if
+# you add rules, or you will have to reason about evaluation order.
+
+(version 1)
+
+
+# =====================================================================
+# 1. ELECTRODE INPUT ISOLATION
+#    /IN1P../IN4N and /RLDOUT carry microvolt-level biopotentials at
+#    PGA gains up to 12x. Any aggressor coupling here lands directly in
+#    the 24-bit conversion, so buy distance wherever the layout allows.
+# =====================================================================
+
+(rule "ain_to_digital"
+	(constraint clearance (min 0.5mm))
+	(condition "A.NetClass == 'AIN' && B.NetClass == 'DIG'"))
+
+(rule "ain_to_usb"
+	(constraint clearance (min 0.8mm))
+	(condition "A.NetClass == 'AIN' && B.NetClass == 'USB'"))
+
+(rule "ain_to_power"
+	(constraint clearance (min 0.6mm))
+	(condition "A.NetClass == 'AIN' && B.NetClass == 'PWR'"))
+
+# The TPS62130 switch node is the loudest thing on this board:
+# multi-amp edges at up to 2.25MHz on a large-dV/dt node.
+(rule "ain_to_switch_node"
+	(constraint clearance (min 2.0mm))
+	(condition "A.NetClass == 'AIN' && B.NetClass == 'SWNODE'"))
+
+(rule "aref_to_switch_node"
+	(constraint clearance (min 2.0mm))
+	(condition "A.NetClass == 'AREF' && B.NetClass == 'SWNODE'"))
+
+# Local exception at U3 (TPS62130A): the switch node (SW, pin 3) sits next to
+# PG (power-good, pin 4). PG is a slow DC-ish status output, not a sensitive
+# node, so the 0.40mm SWNODE class clearance is overkill for this adjacent-pin
+# pair and blocks the fanout. Relax SW<->PG only; SWNODE isolation from every
+# other net is unchanged.
+(rule "sw_to_pg_u3"
+	(constraint clearance (min 0.2mm))
+	(condition "(A.NetName == 'Net-(L1-Pad1)' && B.NetName == 'Net-(U3-PG)') || (A.NetName == 'Net-(U3-PG)' && B.NetName == 'Net-(L1-Pad1)')"))
+
+# Same reasoning applied to the analog supply/reference decoupling.
+(rule "aref_to_digital"
+	(constraint clearance (min 0.4mm))
+	(condition "A.NetClass == 'AREF' && B.NetClass == 'DIG'"))
+
+
+# ---------------------------------------------------------------------
+# FINE-PITCH FANOUT AT U2 (ADS1298, 0.5mm-pitch TQFP-64)
+#   The AIN/AREF class clearances are sized to isolate the electrode
+#   path from aggressors (rules above). Between nets of the SAME class
+#   -- e.g. two adjacent analog-input pins escaping the package, or the
+#   VCAP/VREF decoupling nets -- that isolation is not needed and the
+#   large clearance makes the pins impossible to route. Relax clearance
+#   for same-class pairs only; the ain_to_* / aref_to_* rules still
+#   enforce isolation from DIG / SWNODE / USB / PWR.
+# ---------------------------------------------------------------------
+(rule "ain_to_ain_fanout"
+	(constraint clearance (min 0.15mm))
+	(condition "A.NetClass == 'AIN' && B.NetClass == 'AIN'"))
+
+(rule "aref_to_aref_fanout"
+	(constraint clearance (min 0.15mm))
+	(condition "A.NetClass == 'AREF' && B.NetClass == 'AREF'"))
+
+# Let the analog nets neck down to the JLC manufacturing floor (0.15mm)
+# at the fine-pitch pads, while still defaulting to the wider class width
+# out in open copper.
+(rule "ain_width_range"
+	(constraint track_width (min 0.15mm) (opt 0.25mm) (max 0.4mm))
+	(condition "A.NetClass == 'AIN'"))
+
+(rule "aref_width_range"
+	(constraint track_width (min 0.15mm) (opt 0.3mm) (max 0.4mm))
+	(condition "A.NetClass == 'AREF'"))
+
+# Fanout INSIDE the ADS1298 (U2). The 0.5mm-pitch TQFP-64 forces adjacent
+# pins ~0.20mm apart, and an electrode-input trace must also squeeze past the
+# neighbouring (often unconnected) pad to reach its pin. The AIN 0.40mm class
+# clearance blocks both. Relax clearance to 0.15mm for pads AND tracks inside
+# U2's courtyard -- but ONLY between benign nets. DIG / SWNODE / USB are
+# excluded, so the ain_to_digital / ain_to_switch_node / ain_to_usb isolation
+# still holds right at the pins (route those aggressors on the opposite layer).
+(rule "ads_u2_fanout"
+	(constraint clearance (min 0.15mm))
+	(condition "A.intersectsCourtyard('U2') && B.intersectsCourtyard('U2') && A.NetClass != 'DIG' && A.NetClass != 'SWNODE' && A.NetClass != 'USB' && B.NetClass != 'DIG' && B.NetClass != 'SWNODE' && B.NetClass != 'USB'"))
+
+
+# =====================================================================
+# 2. DIFFERENTIAL SYMMETRY
+#    CMRR depends on the two halves of each electrode pair seeing the
+#    same interference. That means tight, symmetric coupling much more
+#    than it means controlled impedance at these frequencies.
+# =====================================================================
+
+(rule "in_pair_uncoupled"
+	(constraint diff_pair_uncoupled (max 5mm))
+	(condition "A.inDiffPair('/IN*')"))
+
+# Gap max is a CMRR rule, NOT a controlled-impedance rule. At EMG/ECG
+# frequencies (DC-500Hz) the traces are electrically lumped -- a wavelength at
+# 500Hz is ~300km against a 55mm trace -- so odd-mode impedance is meaningless
+# and a tight 0.25mm gap buys nothing. What matters is that both halves of the
+# pair traverse the SAME environment, so interference arrives common-mode and
+# the PGA's ~115dB CMRR rejects it. A gap of 1-2mm does that perfectly well.
+# Max is therefore set to catch genuinely DIVERGENT routing (P and N taking
+# different paths across the board), not to enforce tight coupling.
+(rule "in_pair_gap"
+	(constraint diff_pair_gap (min 0.2mm) (opt 0.25mm) (max 2mm))
+	(condition "A.inDiffPair('/IN*')"))
+
+
+# =====================================================================
+# 3. ANALOG KEEPOUT REGION
+#    Draw a Rule Area covering U2's analog half plus the J2-J5 / BAV99
+#    input network, and name it exactly "ANALOG_ZONE" (Rule Area
+#    properties > Name). These rules then keep digital and switching
+#    copper out of it on the routing layers.
+#
+#    Apply the area to F.Cu and B.Cu only -- NOT to In1.Cu. The whole
+#    point of the 4-layer stackup is an unbroken In1.Cu ground plane
+#    under the input network; excluding copper there would defeat it.
+#    The rules below only disallow the DIG/SWNODE/USB netclasses, so
+#    the In1.Cu plane (netclass PWR) is unaffected either way, but keep
+#    the area off In1.Cu so later rule edits cannot slice the plane.
+# =====================================================================
+
+(rule "no_digital_in_analog_zone"
+	(constraint disallow track via)
+	(condition "A.NetClass == 'DIG' && A.insideArea('ANALOG_ZONE')"))
+
+(rule "no_switching_in_analog_zone"
+	(constraint disallow track via)
+	(condition "A.NetClass == 'SWNODE' && A.insideArea('ANALOG_ZONE')"))
+
+(rule "no_usb_in_analog_zone"
+	(constraint disallow track via)
+	(condition "A.NetClass == 'USB' && A.insideArea('ANALOG_ZONE')"))
+
+
+# =====================================================================
+# 4. CURRENT-CARRYING MINIMUMS
+#    1oz outer copper, ~10-20 C rise.
+# =====================================================================
+
+# Power widths as ranges. The board is sense-only: max realistic load is
+# ~1.5 A during USB-C fast charge, so 0.6mm (2.3 A capacity, 1oz outer,
+# 10 C rise) is enough with 1.5x margin. Cap at 0.6mm so a wide pour is
+# used instead of a fat trace once you need more copper than that.
+# Min is the JLCPCB manufacturing floor for outer 1oz copper.
+(rule "power_width_range"
+	(constraint track_width (min 0.15mm) (opt 0.6mm) (max 0.6mm))
+	(condition "A.NetClass == 'PWR'"))
+
+(rule "analog_supply_width_range"
+	(constraint track_width (min 0.15mm) (opt 0.6mm) (max 0.6mm))
+	(condition "A.NetClass == 'APWR'"))
+
+# SW node keeps a higher floor -- narrow SW radiates more than it saves
+# space, and this net is the loudest thing on the board. If the TPS62130
+# (U3) fanout physically can't accept 0.4mm, add a separate rule scoped
+# to U3's courtyard only.
+(rule "switch_node_width_range"
+	(constraint track_width (min 0.4mm) (opt 0.6mm) (max 0.6mm))
+	(condition "A.NetClass == 'SWNODE'"))
+
+
+# =====================================================================
+# 5. PATIENT-CONNECTED / HIGH-VOLTAGE BOUNDARY  -- NOT YET ACTIVE
+#
+#    This board as it stands is sense-only: the highest rail present is
+#    VBUS at 5V. There is no stimulation output stage and therefore no
+#    HV net for these rules to match.
+#
+#    If a stim driver is added later: create an "HV" netclass, then
+#    uncomment these. 3mm is a working starting point for ~100V in
+#    pollution degree 2, but the binding number has to come from the
+#    IEC 60601-1 clearance/creepage tables for the actual stim voltage
+#    and isolation strategy -- treat 3mm as a placeholder to be
+#    replaced, not as a derived value.
+# =====================================================================
+
+# (rule "hv_to_everything"
+# 	(constraint clearance (min 3.0mm))
+# 	(condition "A.NetClass == 'HV' && B.NetClass != 'HV'"))
+#
+# (rule "hv_to_electrode_input"
+# 	(constraint clearance (min 4.0mm))
+# 	(condition "A.NetClass == 'HV' && B.NetClass == 'AIN'"))
+#
+# (rule "hv_min_width"
+# 	(constraint track_width (min 0.5mm))
+# 	(condition "A.NetClass == 'HV'"))

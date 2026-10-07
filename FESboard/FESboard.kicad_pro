@@ -41,7 +41,7 @@
         "pads": {
           "drill": 0.8,
           "height": 1.27,
-          "width": 2.54
+          "width": 1.27
         },
         "silk_line_width": 0.1,
         "silk_text_italic": false,
@@ -60,7 +60,7 @@
           "hatch_smoothing_level": 0,
           "hatch_smoothing_value": 0.1,
           "hatch_thickness": 1.0,
-          "min_clearance": 0.5,
+          "min_clearance": 0.0,
           "min_island_area": 10.0,
           "min_thickness": 0.25,
           "pad_connection": 1,
@@ -74,6 +74,11 @@
           "gap": 0.0,
           "via_gap": 0.0,
           "width": 0.0
+        },
+        {
+          "gap": 0.15,
+          "via_gap": 0.15,
+          "width": 0.2
         }
       ],
       "drc_exclusions": [],
@@ -146,7 +151,7 @@
       },
       "rules": {
         "max_error": 0.005,
-        "min_clearance": 0.15,
+        "min_clearance": 0.0,
         "min_connection": 0.0,
         "min_copper_edge_clearance": 0.5,
         "min_groove_width": 0.0,
@@ -159,7 +164,7 @@
         "min_text_height": 0.8,
         "min_text_thickness": 0.08,
         "min_through_hole_diameter": 0.3,
-        "min_track_width": 0.15,
+        "min_track_width": 0.2,
         "min_via_annular_width": 0.1,
         "min_via_diameter": 0.5,
         "solder_mask_to_copper_clearance": 0.0,
@@ -210,7 +215,14 @@
         }
       ],
       "track_widths": [
-        0.0
+        0.0,
+        0.15,
+        0.2,
+        0.25,
+        0.3,
+        0.4,
+        0.5,
+        0.6
       ],
       "tuning_pattern_settings": {
         "diff_pair_defaults": {
@@ -242,6 +254,18 @@
         {
           "diameter": 0.0,
           "drill": 0.0
+        },
+        {
+          "diameter": 0.5,
+          "drill": 0.25
+        },
+        {
+          "diameter": 0.6,
+          "drill": 0.3
+        },
+        {
+          "diameter": 0.8,
+          "drill": 0.4
         }
       ],
       "zones_allow_external_fillets": false
@@ -462,7 +486,6 @@
       "footprint_filter": "ignore",
       "footprint_link_issues": "warning",
       "four_way_junction": "ignore",
-      "global_label_dangling": "warning",
       "ground_pin_not_ground": "warning",
       "hier_label_mismatch": "error",
       "isolated_pin_label": "warning",
@@ -530,7 +553,6 @@
         "bus_width": 12,
         "clearance": 0.4,
         "diff_pair_gap": 0.25,
-        "diff_pair_via_gap": 0.25,
         "diff_pair_width": 0.25,
         "line_style": 0,
         "microvia_diameter": 0.3,
@@ -547,16 +569,15 @@
       },
       {
         "bus_width": 12,
-        "clearance": 0.3,
+        "clearance": 0.2,
         "diff_pair_gap": 0.25,
-        "diff_pair_via_gap": 0.25,
         "diff_pair_width": 0.25,
         "line_style": 0,
         "microvia_diameter": 0.3,
         "microvia_drill": 0.1,
         "name": "APWR",
         "pcb_color": "rgb(52, 152, 219)",
-        "priority": 0,
+        "priority": 1,
         "schematic_color": "rgb(52, 152, 219)",
         "track_width": 0.6,
         "tuning_profile": "",
@@ -566,16 +587,15 @@
       },
       {
         "bus_width": 12,
-        "clearance": 0.3,
+        "clearance": 0.2,
         "diff_pair_gap": 0.25,
-        "diff_pair_via_gap": 0.25,
         "diff_pair_width": 0.25,
         "line_style": 0,
         "microvia_diameter": 0.3,
         "microvia_drill": 0.1,
         "name": "AREF",
         "pcb_color": "rgb(26, 188, 156)",
-        "priority": 0,
+        "priority": 2,
         "schematic_color": "rgb(26, 188, 156)",
         "track_width": 0.3,
         "tuning_profile": "",
@@ -587,14 +607,13 @@
         "bus_width": 12,
         "clearance": 0.2,
         "diff_pair_gap": 0.25,
-        "diff_pair_via_gap": 0.25,
         "diff_pair_width": 0.25,
         "line_style": 0,
         "microvia_diameter": 0.3,
         "microvia_drill": 0.1,
         "name": "DIG",
         "pcb_color": "rgb(149, 165, 166)",
-        "priority": 0,
+        "priority": 3,
         "schematic_color": "rgb(149, 165, 166)",
         "track_width": 0.2,
         "tuning_profile": "",
@@ -604,37 +623,53 @@
       },
       {
         "bus_width": 12,
-        "clearance": 0.3,
+        "clearance": 0.2,
         "diff_pair_gap": 0.25,
-        "diff_pair_via_gap": 0.25,
         "diff_pair_width": 0.25,
         "line_style": 0,
         "microvia_diameter": 0.3,
         "microvia_drill": 0.1,
         "name": "PWR",
         "pcb_color": "rgb(231, 76, 60)",
-        "priority": 0,
+        "priority": 4,
         "schematic_color": "rgb(231, 76, 60)",
-        "track_width": 0.8,
+        "track_width": 0.6,
         "tuning_profile": "",
         "via_diameter": 0.8,
         "via_drill": 0.4,
+        "wire_width": 6
+      },
+      {
+        "bus_width": 12,
+        "clearance": 0.2,
+        "diff_pair_gap": 0.2,
+        "diff_pair_width": 0.15,
+        "line_style": 0,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "name": "RF",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 7,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.15,
+        "tuning_profile": "",
+        "via_diameter": 0.6,
+        "via_drill": 0.3,
         "wire_width": 6
       },
       {
         "bus_width": 12,
         "clearance": 0.4,
         "diff_pair_gap": 0.25,
-        "diff_pair_via_gap": 0.25,
         "diff_pair_width": 0.25,
         "line_style": 0,
         "microvia_diameter": 0.3,
         "microvia_drill": 0.1,
         "name": "SWNODE",
         "pcb_color": "rgb(230, 126, 34)",
-        "priority": 0,
+        "priority": 5,
         "schematic_color": "rgb(230, 126, 34)",
-        "track_width": 0.8,
+        "track_width": 0.6,
         "tuning_profile": "",
         "via_diameter": 0.8,
         "via_drill": 0.4,
@@ -642,18 +677,17 @@
       },
       {
         "bus_width": 12,
-        "clearance": 0.25,
-        "diff_pair_gap": 0.2,
-        "diff_pair_via_gap": 0.2,
-        "diff_pair_width": 0.35,
+        "clearance": 0.15,
+        "diff_pair_gap": 0.15,
+        "diff_pair_width": 0.2,
         "line_style": 0,
         "microvia_diameter": 0.3,
         "microvia_drill": 0.1,
         "name": "USB",
         "pcb_color": "rgb(155, 89, 182)",
-        "priority": 0,
+        "priority": 6,
         "schematic_color": "rgb(155, 89, 182)",
-        "track_width": 0.35,
+        "track_width": 0.2,
         "tuning_profile": "",
         "via_diameter": 0.6,
         "via_drill": 0.3,
@@ -689,10 +723,6 @@
       {
         "netclass": "AIN",
         "pattern": "Net-(J4-Pad*)"
-      },
-      {
-        "netclass": "AIN",
-        "pattern": "Net-(J5-Pad*)"
       },
       {
         "netclass": "AIN",
@@ -767,33 +797,38 @@
         "pattern": "Net-(J8-*)"
       },
       {
-        "netclass": "DIG",
-        "pattern": "Net-(J1-*)"
-      },
-      {
         "netclass": "PWR",
         "pattern": "GND"
       },
       {
         "netclass": "PWR",
-        "pattern": "Net-(J9-Pin_2)"
+        "pattern": "Net-(J6-Pin_2)"
       },
       {
         "netclass": "DIG",
         "pattern": "Net-(U2-CLKSEL)"
+      },
+      {
+        "netclass": "AIN",
+        "pattern": "Net-(J1-Pad*)"
+      },
+      {
+        "netclass": "DIG",
+        "pattern": "Net-(J7-*)"
+      },
+      {
+        "netclass": "USB",
+        "pattern": "Net-(J5-CC*)"
       }
     ]
   },
   "pcbnew": {
     "last_paths": {
-      "gencad": "",
       "idf": "",
       "netlist": "",
-      "plot": "",
-      "pos_files": "",
+      "plot": "Gerber/",
       "specctra_dsn": "",
       "step": "",
-      "svg": "",
       "vrml": ""
     },
     "page_layout_descr_file": ""
@@ -857,6 +892,18 @@
         },
         {
           "group_by": true,
+          "label": "Exclude from Simulation",
+          "name": "${EXCLUDE_FROM_SIM}",
+          "show": true
+        },
+        {
+          "group_by": true,
+          "label": "Exclude from Position Files",
+          "name": "${EXCLUDE_FROM_POS_FILES}",
+          "show": true
+        },
+        {
+          "group_by": true,
           "label": "Footprint",
           "name": "Footprint",
           "show": true
@@ -904,17 +951,9 @@
     "meta": {
       "version": 1
     },
-    "net_format_name": "",
-    "page_layout_descr_file": "MCU",
+    "page_layout_descr_file": "",
     "plot_directory": "",
     "reuse_designators": true,
-    "space_save_all_events": true,
-    "spice_current_sheet_as_root": false,
-    "spice_external_command": "spice \"%I\"",
-    "spice_model_current_sheet_as_root": true,
-    "spice_save_all_currents": false,
-    "spice_save_all_dissipations": false,
-    "spice_save_all_voltages": false,
     "subpart_first_id": 65,
     "subpart_id_separator": 0,
     "top_level_sheets": [
@@ -924,7 +963,7 @@
         "uuid": "bc6baefb-a034-4913-a751-2c83a57572e0"
       }
     ],
-    "used_designators": "D11-12,J8-9,#PWR91-93,#PWR105,U6-7",
+    "used_designators": "#PWR108",
     "variants": []
   },
   "sheets": [
