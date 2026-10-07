@@ -1,233 +1,156 @@
 /*
- * nRF7002DK Wi-Fi scan — the smallest thing that proves the radio works.
+ * nRF7002DK (nRF Connect SDK): join Wi-Fi with stored credentials, get an IP by
+ * DHCP, then listen on TCP 5000 and send a line once a second to whoever connects.
  *
- * A scan is the right first step because it needs no credentials, so nothing
- * can be wrong except the parts you are trying to test: the SPI link to the
- * nRF7002, the firmware patch the driver loads into it, and the Wi-Fi stack.
- * If SSIDs appear, all three are good.
- *
- * Board target: nrf7002dk/nrf5340/cpuapp
- * Build and flash: see ../README.md
- *
- * ---------------------------------------------------------------------------
- * WHY THE CALLBACK DOES NOT PRINT
- *
- * Scan results arrive as a burst - tens of access points inside a few hundred
- * milliseconds, one net_mgmt event each, all delivered on the net_mgmt event
- * thread. Logging from that thread drops results, and it does it twice over:
- *
- *   1. Zephyr's log buffer is CONFIG_LOG_BUFFER_SIZE (1 KB by default) and the
- *      log thread only drains it every CONFIG_LOG_PROCESS_THREAD_SLEEP_MS
- *      (1 s by default). A burst overflows it and you get
- *      "--- N messages dropped ---" instead of the scan.
- *
- *   2. Whatever time the callback spends formatting is time the net_mgmt queue
- *      is not being serviced. That queue is CONFIG_NET_MGMT_EVENT_QUEUE_SIZE
- *      deep, and when it fills, results are dropped with no error anywhere.
- *
- * So the callback only COPIES each result - a memcpy and a counter - and main
- * does every bit of formatting after the scan has finished. The semaphore is
- * the handoff, and taking it is also what makes the counters safe to read:
- * k_sem_give/k_sem_take establishes the happens-before, so main sees every
- * store the event thread made before it signalled.
- * ---------------------------------------------------------------------------
+ * Follows nrf/samples/wifi/sta. SSID/password: credentials.conf (not in git).
  */
 
-#include <wifi_app.h>
-
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/net/wifi.h>
-#include <string.h>
+#include <zephyr/net/ethernet_mgmt.h>
+#include <zephyr/net/net_event.h>
+#include <zephyr/net/net_if.h>
+#include <zephyr/net/socket.h>
+#include <zephyr/net/wifi_mgmt.h>
+#include <net/wifi_ready.h>
 
-LOG_MODULE_REGISTER(wifi_app, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
 
-/* Events this app listens for. Scan results arrive one event per AP, then a
- * single DONE event carrying the overall status. */
-#define WIFI_EVENTS (NET_EVENT_WIFI_SCAN_RESULT | NET_EVENT_WIFI_SCAN_DONE)
+#define PORT 5000
 
-static struct net_mgmt_event_callback wifi_cb;
+/* Used when the nRF70 OTP holds no MAC (set in app.overlay). */
+static const uint8_t dts_mac[6] = DT_PROP_OR(DT_CHOSEN(zephyr_wifi), local_mac_address, {0});
 
-/* Results are stored, not printed. Written by the net_mgmt event thread, read
- * by main only after taking scan_done. */
-static struct wifi_scan_result results[WIFI_APP_MAX_RESULTS];
-static uint32_t result_count;       /* stored in results[] */
-static uint32_t overflow_count;     /* seen but no room - reported, not hidden */
-static int      scan_status;
+static K_SEM_DEFINE(ready, 0, 1);
+static K_SEM_DEFINE(joined, 0, 1);
+static K_SEM_DEFINE(got_ip, 0, 1);
+static int join_status;
+/* Two callbacks: one callback cannot mix events from different net_mgmt layers. */
+static struct net_mgmt_event_callback wifi_cb, ip_cb;
 
-/* Signals main() that the scan finished, so it does not have to poll or guess
- * at a delay. */
-static K_SEM_DEFINE(scan_done, 0, 1);
-1520904.pts-3.cgu-ubuntu
-/**
- * @brief Store one access point. Deliberately does no formatting and no I/O.
- *
- * @note Runs on the net_mgmt event thread. Everything here is O(1) and
- *       non-blocking on purpose - see the note at the top of this file.
- */
-static void on_scan_result(struct net_mgmt_event_callback *cb)
+static void wifi_ready_cb(bool up)
 {
-	const struct wifi_scan_result *r =
-		(const struct wifi_scan_result *)cb->info;
-
-	/* STEP 1: a full table is counted, never silently discarded. */
-	if (result_count >= WIFI_APP_MAX_RESULTS) {
-		overflow_count++;
-		return;
-	}
-
-	/* STEP 2: copy it out. cb->info is only valid for this call. */
-	memcpy(&results[result_count], r, sizeof(*r));
-	result_count++;
-}
-
-/**
- * @brief Record the outcome and release main.
- *
- * @note Also on the net_mgmt event thread. The k_sem_give() is the last thing
- *       it does, so every store above is visible to whoever takes the
- *       semaphore.
- */
-static void on_scan_done(struct net_mgmt_event_callback *cb)
-{
-	const struct wifi_status *s = (const struct wifi_status *)cb->info;
-
-	scan_status = s->status;
-	k_sem_give(&scan_done);
-}
-
-/**
- * @brief net_mgmt dispatcher.
- */
-static void wifi_event_handler(struct net_mgmt_event_callback *cb,
-			       uint64_t mgmt_event, struct net_if *iface)
-{
-	ARG_UNUSED(iface);
-
-	switch (mgmt_event) {
-	case NET_EVENT_WIFI_SCAN_RESULT:
-		on_scan_result(cb);
-		break;
-	case NET_EVENT_WIFI_SCAN_DONE:
-		on_scan_done(cb);
-		break;
-	default:
-		break;
+	if (up) {
+		k_sem_give(&ready);
 	}
 }
 
-int wifi_app_events_init(void)
+static void on_wifi_event(struct net_mgmt_event_callback *c, uint64_t ev, struct net_if *iface)
 {
-	net_mgmt_init_event_callback(&wifi_cb, wifi_event_handler, WIFI_EVENTS);
-	net_mgmt_add_event_callback(&wifi_cb);
-	return 0;
+	join_status = ((const struct wifi_status *)c->info)->status;
+	k_sem_give(&joined);
 }
 
-struct net_if *wifi_app_iface(void)
+static void on_ip_event(struct net_mgmt_event_callback *c, uint64_t ev, struct net_if *iface)
 {
-	return net_if_get_first_wifi();
-}
-
-int wifi_app_scan(struct net_if *iface)
-{
-	/* An all-zero params struct means "defaults": every band, every channel,
-	 * active scan. Narrow it later (params.bands, params.dwell_time_active)
-	 * once a plain scan is known to work. */
-	struct wifi_scan_params params = { 0 };
-
-	result_count = 0;
-	overflow_count = 0;
-	scan_status = 0;
-
-	return net_mgmt(NET_REQUEST_WIFI_SCAN, iface, &params, sizeof(params));
-}
-
-/**
- * @brief Print the stored table. Runs on main, after the scan has finished.
- */
-static void print_results(void)
-{
-	LOG_INF("#    | SSID                             | band      | chan | RSSI     | security");
-
-	for (uint32_t i = 0; i < result_count; i++) {
-		const struct wifi_scan_result *r = &results[i];
-
-		/* An SSID is not a C string - it is ssid_length bytes, and a
-		 * hidden network sends none at all, so never print it with %s. */
-		LOG_INF("%-4u | %-32.32s | %-9s | %4u | %4d dBm | %s",
-			i + 1,
-			r->ssid_length ? (const char *)r->ssid : "<hidden>",
-			wifi_band_txt(r->band),
-			r->channel,
-			r->rssi,
-			wifi_security_txt(r->security));
-
-		/* Deferred logging drains on a thread that sleeps between runs,
-		 * so a long table can still outpace it. Yield every few lines and
-		 * the drain keeps up without the buffer ever filling. */
-		if ((i % 4) == 3) {
-			k_msleep(20);
-		}
-	}
-
-	if (overflow_count) {
-		LOG_WRN("%u more AP(s) were found but the table holds only %u -"
-			" raise WIFI_APP_MAX_RESULTS",
-			overflow_count, (uint32_t)WIFI_APP_MAX_RESULTS);
-	}
+	k_sem_give(&got_ip);
 }
 
 int main(void)
 {
-	LOG_INF("=====================================");
-	LOG_INF(" nRF7002DK Wi-Fi scan");
-	LOG_INF("=====================================");
+	struct net_if *iface = net_if_get_first_wifi();
+	wifi_ready_callback_t rcb = { .wifi_ready_cb = wifi_ready_cb };
 
-	/* STEP 1: find the radio. The driver loads its firmware patch during
-	 * boot, so give it a moment before deciding it is absent. */
-	struct net_if *iface = NULL;
+	if (!iface) {
+		LOG_ERR("no Wi-Fi interface");
+		return -ENODEV;
+	}
+	register_wifi_ready_callback(rcb, iface);
 
-	for (int i = 0; i < 20 && iface == NULL; i++) {
-		iface = wifi_app_iface();
-		if (iface == NULL) {
-			k_msleep(100);
+	net_mgmt_init_event_callback(&wifi_cb, on_wifi_event, NET_EVENT_WIFI_CONNECT_RESULT);
+	net_mgmt_add_event_callback(&wifi_cb);
+	net_mgmt_init_event_callback(&ip_cb, on_ip_event, NET_EVENT_IPV4_DHCP_BOUND);
+	net_mgmt_add_event_callback(&ip_cb);
+
+	/* Zephyr will not bring an Ethernet-type interface up without a valid MAC. */
+	struct net_linkaddr *la = net_if_get_link_addr(iface);
+
+	if (la->len != 6 || !net_eth_is_addr_valid((struct net_eth_addr *)la->addr)) {
+		struct ethernet_req_params mp;
+
+		memcpy(mp.mac_address.addr, dts_mac, sizeof(dts_mac));
+		net_mgmt(NET_REQUEST_ETHERNET_SET_MAC_ADDRESS, iface, &mp, sizeof(mp));
+		int up = net_if_up(iface);
+
+		if (up && up != -EALREADY) {
+			LOG_ERR("cannot bring the Wi-Fi interface up (%d)", up);
+			return up;
 		}
 	}
 
-	if (iface == NULL) {
-		LOG_ERR("no Wi-Fi interface after 2 s.");
-		LOG_ERR("  The nRF7002 did not come up - check that the nRF70");
-		LOG_ERR("  blobs were fetched (west blobs fetch nrf_wifi) and");
-		LOG_ERR("  that the board target is nrf7002dk/nrf5340/cpuapp.");
-		return -ENODEV;
-	}
-	LOG_INF("Wi-Fi interface ready");
-
-	/* STEP 2: subscribe before scanning, or early results are lost. */
-	wifi_app_events_init();
-
-	/* STEP 3: scan, then wait to be told it finished. */
-	LOG_INF("scanning...");
-
-	int ret = wifi_app_scan(iface);
-	if (ret) {
-		LOG_ERR("scan request rejected: %d", ret);
-		return ret;
-	}
-
-	if (k_sem_take(&scan_done, K_SECONDS(30)) != 0) {
-		LOG_WRN("no scan-done event within 30 s");
+	if (k_sem_take(&ready, K_SECONDS(15))) {
+		LOG_ERR("Wi-Fi did not become ready");
 		return -ETIMEDOUT;
 	}
 
-	/* STEP 4: the scan is over and nothing is writing results[] any more,
-	 * so printing can take as long as it likes. */
-	if (scan_status) {
-		LOG_ERR("scan failed (status %d)", scan_status);
-		return scan_status;
+	LOG_INF("joining the stored network...");
+	int ret = net_mgmt(NET_REQUEST_WIFI_CONNECT_STORED, iface, NULL, 0);
+
+	if (ret) {
+		LOG_ERR("connect request rejected (%d)", ret);
+		return ret;
+	}
+	/* Wait up to 72 s, and show where the supplicant is while we do. */
+	bool done = false;
+
+	for (int i = 0; i < 24 && !done; i++) {
+		done = k_sem_take(&joined, K_SECONDS(3)) == 0;
+		if (!done) {
+			struct wifi_iface_status st = { 0 };
+
+			net_mgmt(NET_REQUEST_WIFI_IFACE_STATUS, iface, &st, sizeof(st));
+			LOG_INF("waiting to join... state: %s", wifi_state_txt(st.state));
+		}
+	}
+	if (!done) {
+		LOG_ERR("no join result after 72 s - network not found, or security mismatch");
+		return -ETIMEDOUT;
+	}
+	if (join_status) {
+		LOG_ERR("join failed (status %d)", join_status);
+		return -ECONNREFUSED;
+	}
+	if (k_sem_take(&got_ip, K_SECONDS(30))) {
+		LOG_ERR("joined, but DHCP gave no address");
+		return -ETIMEDOUT;
 	}
 
-	print_results();
-	LOG_INF("scan complete: %u access point(s)", result_count);
-	LOG_INF("done. Reset the board to scan again.");
-	return 0;
+	char ip[NET_IPV4_ADDR_LEN];
+
+	net_addr_ntop(AF_INET, net_if_ipv4_get_global_addr(iface, NET_ADDR_PREFERRED), ip,
+		      sizeof(ip));
+	LOG_INF("connected, IP %s - listening on port %d", ip, PORT);
+
+	int srv = zsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	struct sockaddr_in a = {
+		.sin_family = AF_INET,
+		.sin_port = htons(PORT),
+		.sin_addr.s_addr = htonl(INADDR_ANY),
+	};
+
+	if (srv < 0 || zsock_bind(srv, (struct sockaddr *)&a, sizeof(a)) ||
+	    zsock_listen(srv, 1)) {
+		LOG_ERR("cannot listen on port %d", PORT);
+		return -errno;
+	}
+
+	for (;;) {
+		int c = zsock_accept(srv, NULL, NULL);
+
+		if (c < 0) {
+			continue;
+		}
+		LOG_INF("client connected");
+		for (int n = 0;; n++) {
+			char msg[40];
+			int len = snprintk(msg, sizeof(msg), "hello from nRF7002 %d\n", n);
+
+			if (zsock_send(c, msg, len, 0) < 0) {
+				break;
+			}
+			k_sleep(K_SECONDS(1));
+		}
+		zsock_close(c);
+		LOG_INF("client left");
+	}
 }
