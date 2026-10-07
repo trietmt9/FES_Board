@@ -1,3 +1,6 @@
 {
-    "cmake.sourceDirectory": "/home/cgu/Documents/FES_Board/firmware"
+    "cmake.sourceDirectory": "/home/cgu/Documents/FES_Board/firmware",
+    "nrf-connect.applications": [
+        "${workspaceFolder}/WifiFirmware"
+    ]
 }
